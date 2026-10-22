@@ -13,6 +13,39 @@ export interface BookMeta {
   addedAt: number;
   /** Small data: URL of the cover, if the book has one. */
   cover?: string;
+  /** Shelves/labels chosen by the user, lowercase, trimmed, no duplicates. */
+  tags?: string[];
+  /** Set when the user edits the metadata (tags); sync keeps the newest. */
+  updatedAt?: number;
+}
+
+export type AnnotationKind = 'highlight' | 'note' | 'bookmark';
+export type HighlightColor = 'yellow' | 'green' | 'blue' | 'pink';
+
+/** One highlight, note or bookmark. Stored as items of annotations/<bookId>.json. */
+export interface Annotation {
+  /** Random id, stable across devices. */
+  id: string;
+  bookId: string;
+  kind: AnnotationKind;
+  /** EPUB CFI range (highlight/note) or CFI point (bookmark); PDF: page number as a string. */
+  location: string;
+  /** The highlighted text (or the first words of the page for a bookmark), kept to re-find it and to export. */
+  text: string;
+  /** The user's note, for kind 'note' (and optional on highlights). */
+  note?: string;
+  color: HighlightColor;
+  /** Chapter label at the time, for exports. */
+  chapter?: string;
+  createdAt: number;
+  updatedAt: number;
+  /** Tombstone: sync never deletes files, so a removed annotation stays with deleted=true and the newest updatedAt wins. */
+  deleted?: boolean;
+}
+
+export interface AnnotationFile {
+  bookId: string;
+  items: Annotation[];
 }
 
 export interface Progress {
@@ -97,6 +130,8 @@ export interface LookupResult {
 }
 
 export interface R2Config {
+  /** Only for tests/other S3-compatible servers; R2's own URL is built from accountId when absent. */
+  endpoint?: string;
   accountId: string;
   bucket: string;
   accessKeyId: string;
