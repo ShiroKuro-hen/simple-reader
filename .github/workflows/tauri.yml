@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches: [tauri]
+    tags: ['v*']
 
 permissions:
   contents: read
@@ -62,3 +63,27 @@ jobs:
           name: simple-reader-android
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           if-no-files-found: error
+
+  # Pushing a tag like v0.2.0 publishes both builds on a GitHub Release. They are unsigned
+  # (debug-signed APK, no Windows code signing), so the release is marked as a pre-release.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          setup=$(find artifacts/simple-reader-windows -name '*-setup.exe' | head -n1)
+          apk=$(find artifacts/simple-reader-android -name '*.apk' | head -n1)
+          cp "$setup" "simple-reader-$tag-windows-setup.exe"
+          cp "$apk" "simple-reader-$tag-android-debug.apk"
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --title "simple-reader $tag" --generate-notes --prerelease \
+            "simple-reader-$tag-windows-setup.exe" "simple-reader-$tag-android-debug.apk"

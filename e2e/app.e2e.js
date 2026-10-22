@@ -383,6 +383,22 @@ async (page, ctx = {}) => {
     await page.setViewportSize({ width: 1280, height: 800 });
   });
 
+  await step('narrowest phone (360) and wide desktop (1440): library and reader never scroll sideways, library targets stay 44px', async () => {
+    for (const width of [360, 1440]) {
+      await backToLibrary();
+      await page.setViewportSize({ width, height: 800 });
+      await sleep(300);
+      ok((await overflowX()) <= 0, 'library scrolls horizontally at ' + width);
+      const small = await page.evaluate(() => [...document.querySelectorAll('.lib button, .lib .icon-btn')].filter((b) => b.offsetParent && (b.getBoundingClientRect().height < 43.5 || b.getBoundingClientRect().width < 43.5)).map((b) => b.className + ':' + b.textContent.trim()));
+      ok(small.length === 0, 'small targets at ' + width + ': ' + small.join(', '));
+      await page.getByRole('button', { name: /^Open The Lighthouse/ }).click();
+      await page.locator('.reader').waitFor();
+      await until(async () => !(await page.locator('.loading').count()), 'book to load', 20000);
+      ok((await overflowX()) <= 0, 'reader scrolls horizontally at ' + width);
+    }
+    await page.setViewportSize({ width: 1280, height: 800 });
+  });
+
   await step('theme default follows prefers-color-scheme until the user picks', async () => {
     await page.evaluate(() => localStorage.removeItem('sr.theme'));
     await page.emulateMedia({ colorScheme: 'dark' });
