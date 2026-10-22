@@ -130,7 +130,7 @@ Taken from [PLAN.md](PLAN.md) (written in Spanish). Checked means it exists toda
 
 Issues and pull requests are welcome.
 Open an issue first for anything big so we can agree on the approach.
-Run `npm run typecheck` and `npm test` before sending a PR. Tests avoid mocks: domain rules are pure functions tested with real data, and browser behaviour is checked in a real Chromium (see `e2e/`). To try the reader on a real book of your own, set `REAL_EPUB` to its path for the opt-in specs; never commit books.
+Run `npm run typecheck`, `npm test` and (after a build) `npm run budget` before sending a PR. Tests avoid mocks: domain rules are pure functions tested with real data, and browser behaviour is checked in a real Chromium (see `e2e/`). To try the reader on a real book of your own, set `REAL_EPUB` to its path for the opt-in specs; never commit books.
 
 ## License
 

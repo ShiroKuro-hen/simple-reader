@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "e2e": "node src/reader/e2e/run.mjs && node e2e/run-annotations.mjs",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "budget": "node scripts/bundle-budget.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.4",

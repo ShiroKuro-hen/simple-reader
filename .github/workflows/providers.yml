@@ -1,0 +1,36 @@
+name: Lookup providers
+
+# The translation and dictionary services are free, public and (for Google's gtx) unofficial.
+# Once a week, ask them real questions; if one changed shape or went away, open an issue.
+on:
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run src/lookup/providers.live.test.ts
+        env:
+          LIVE: '1'
+      - name: Open an issue if a provider broke
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="Lookup provider check failed"
+          if [ -z "$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number')" ]; then
+            gh issue create --title "$title" \
+              --body "The weekly live check failed: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. A translation or dictionary service probably changed; see src/lookup/providers.ts and src/lookup/fixtures/capture.mjs to re-record."
+          fi
