@@ -1,0 +1,43 @@
+{
+ "url": "https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=es&dt=t&dt=bd&q=%E5%90%BE%E8%BC%A9%E3%81%AF%E7%8C%AB%E3%81%A7%E3%81%82%E3%82%8B",
+ "captured": "2026-10-22",
+ "status": 200,
+ "body": [
+  [
+   [
+    "soy un gato",
+    "吾輩は猫である",
+    null,
+    null,
+    3,
+    null,
+    null,
+    [
+     [],
+     []
+    ],
+    [
+     [
+      [
+       "8610ded6ae1f9c19659bfa9bcb7344e7",
+       "ja_en_2023q1.md"
+      ]
+     ],
+     [
+      [
+       "e050167b38f2a566522b4157651fc616",
+       "en_es_2023q1.md"
+      ]
+     ]
+    ]
+   ]
+  ],
+  null,
+  "ja",
+  null,
+  null,
+  null,
+  null,
+  []
+ ]
+}

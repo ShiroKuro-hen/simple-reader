@@ -1,0 +1,70 @@
+{
+ "url": "https://api.mymemory.translated.net/get?q=house&langpair=en|es",
+ "captured": "2026-10-22",
+ "status": 200,
+ "body": {
+  "responseData": {
+   "translatedText": "albergar",
+   "match": 1
+  },
+  "quotaFinished": false,
+  "mtLangSupported": null,
+  "responseDetails": "",
+  "responseStatus": 200,
+  "responderId": null,
+  "exception_code": null,
+  "matches": [
+   {
+    "id": "569921249",
+    "segment": "house",
+    "translation": "albergar",
+    "source": "en-GB",
+    "target": "es-ES",
+    "quality": "74",
+    "reference": null,
+    "usage-count": 2,
+    "subject": "All",
+    "created-by": "MateCat",
+    "last-updated-by": "MateCat",
+    "create-date": "2018-07-02 04:20:11",
+    "last-update-date": "2018-07-02 04:20:11",
+    "match": 1,
+    "penalty": 0
+   },
+   {
+    "id": "437829924584641705",
+    "segment": "house",
+    "translation": "casa",
+    "source": "en-GB",
+    "target": "es-419",
+    "quality": 74,
+    "reference": null,
+    "usage-count": 2,
+    "subject": "",
+    "created-by": "MateCat",
+    "last-updated-by": "MateCat",
+    "create-date": "2024-06-23 13:53:54",
+    "last-update-date": "2024-06-23 13:53:54",
+    "match": 0.99,
+    "penalty": 0
+   },
+   {
+    "id": "437829924546278396",
+    "segment": "house",
+    "translation": "casa",
+    "source": "en-US",
+    "target": "es-ES",
+    "quality": 74,
+    "reference": null,
+    "usage-count": 2,
+    "subject": "",
+    "created-by": "MateCat",
+    "last-updated-by": "MateCat",
+    "create-date": "2023-10-21 11:17:03",
+    "last-update-date": "2023-10-21 11:17:03",
+    "match": 0.99,
+    "penalty": 0
+   }
+  ]
+ }
+}

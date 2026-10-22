@@ -1,0 +1,70 @@
+{
+ "url": "https://api.mymemory.translated.net/get?q=hello&langpair=en|es",
+ "captured": "2026-10-22",
+ "status": 200,
+ "body": {
+  "responseData": {
+   "translatedText": "testvalue",
+   "match": 1
+  },
+  "quotaFinished": false,
+  "mtLangSupported": null,
+  "responseDetails": "",
+  "responseStatus": 200,
+  "responderId": null,
+  "exception_code": null,
+  "matches": [
+   {
+    "id": "437829924887230034",
+    "segment": "hello",
+    "translation": "testvalue",
+    "source": "en-GB",
+    "target": "es-ES",
+    "quality": "74",
+    "reference": null,
+    "usage-count": 4,
+    "subject": "All",
+    "created-by": "MateCat",
+    "last-updated-by": "MateCat",
+    "create-date": "2026-07-15 02:13:51",
+    "last-update-date": "2026-07-15 02:13:51",
+    "match": 1,
+    "penalty": 0
+   },
+   {
+    "id": "437829924865166059",
+    "segment": "hello",
+    "translation": "hello",
+    "source": "en-US",
+    "target": "es-ES",
+    "quality": 74,
+    "reference": null,
+    "usage-count": 2,
+    "subject": "",
+    "created-by": "MateCat",
+    "last-updated-by": "MateCat",
+    "create-date": "2026-04-27 23:56:23",
+    "last-update-date": "2026-04-27 23:56:23",
+    "match": 0.99,
+    "penalty": 0
+   },
+   {
+    "id": "437829924648688591",
+    "segment": "hello",
+    "translation": "Murciano",
+    "source": "en-GB",
+    "target": "es-ES",
+    "quality": 74,
+    "reference": null,
+    "usage-count": 4,
+    "subject": "",
+    "created-by": "MateCat",
+    "last-updated-by": "MateCat",
+    "create-date": "2024-11-13 20:04:57",
+    "last-update-date": "2024-11-13 20:04:57",
+    "match": 0.99,
+    "penalty": 0
+   }
+  ]
+ }
+}

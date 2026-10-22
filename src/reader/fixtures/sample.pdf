@@ -1,0 +1,115 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R /Outlines 19 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [6 0 R 8 0 R 10 0 R 12 0 R 14 0 R 16 0 R] /Count 6 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Title (Sample PDF Manual) /Author (Pat Doe) >>
+endobj
+5 0 obj
+<< /Length 170 >>
+stream
+BT /F1 20 Tf 72 700 Td (Page 1 heading.) Tj ET
+BT /F1 20 Tf 72 670 Td (The harbour master counted 1 ships and) Tj ET
+BT /F1 20 Tf 72 640 Td (wrote the number down.) Tj ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+7 0 obj
+<< /Length 170 >>
+stream
+BT /F1 20 Tf 72 700 Td (Page 2 heading.) Tj ET
+BT /F1 20 Tf 72 670 Td (The harbour master counted 2 ships and) Tj ET
+BT /F1 20 Tf 72 640 Td (wrote the number down.) Tj ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+9 0 obj
+<< /Length 170 >>
+stream
+BT /F1 20 Tf 72 700 Td (Page 3 heading.) Tj ET
+BT /F1 20 Tf 72 670 Td (The harbour master counted 3 ships and) Tj ET
+BT /F1 20 Tf 72 640 Td (wrote the number down.) Tj ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+11 0 obj
+<< /Length 170 >>
+stream
+BT /F1 20 Tf 72 700 Td (Page 4 heading.) Tj ET
+BT /F1 20 Tf 72 670 Td (The harbour master counted 4 ships and) Tj ET
+BT /F1 20 Tf 72 640 Td (wrote the number down.) Tj ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 11 0 R >>
+endobj
+13 0 obj
+<< /Length 170 >>
+stream
+BT /F1 20 Tf 72 700 Td (Page 5 heading.) Tj ET
+BT /F1 20 Tf 72 670 Td (The harbour master counted 5 ships and) Tj ET
+BT /F1 20 Tf 72 640 Td (wrote the number down.) Tj ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 13 0 R >>
+endobj
+15 0 obj
+<< /Length 170 >>
+stream
+BT /F1 20 Tf 72 700 Td (Page 6 heading.) Tj ET
+BT /F1 20 Tf 72 670 Td (The harbour master counted 6 ships and) Tj ET
+BT /F1 20 Tf 72 640 Td (wrote the number down.) Tj ET
+endstream
+endobj
+16 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 15 0 R >>
+endobj
+17 0 obj
+<< /Title (Start) /Parent 19 0 R  /Next 18 0 R /Dest [6 0 R /Fit] >>
+endobj
+18 0 obj
+<< /Title (Second half) /Parent 19 0 R /Prev 17 0 R  /Dest [12 0 R /Fit] >>
+endobj
+19 0 obj
+<< /Type /Outlines /First 17 0 R /Last 18 0 R /Count 2 >>
+endobj
+xref
+0 20
+0000000000 65535 f 
+0000000009 00000 n 
+0000000075 00000 n 
+0000000166 00000 n 
+0000000236 00000 n 
+0000000302 00000 n 
+0000000523 00000 n 
+0000000649 00000 n 
+0000000870 00000 n 
+0000000996 00000 n 
+0000001217 00000 n 
+0000001344 00000 n 
+0000001566 00000 n 
+0000001694 00000 n 
+0000001916 00000 n 
+0000002044 00000 n 
+0000002266 00000 n 
+0000002394 00000 n 
+0000002479 00000 n 
+0000002571 00000 n 
+trailer
+<< /Size 20 /Root 1 0 R /Info 4 0 R >>
+startxref
+2645
+%%EOF

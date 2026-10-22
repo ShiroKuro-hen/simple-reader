@@ -1,0 +1,70 @@
+{
+ "url": "https://api.mymemory.translated.net/get?q=%E7%8C%AB&langpair=ja|es",
+ "captured": "2026-10-22",
+ "status": 200,
+ "body": {
+  "responseData": {
+   "translatedText": "Felis silvestris catus",
+   "match": 1
+  },
+  "quotaFinished": false,
+  "mtLangSupported": null,
+  "responseDetails": "",
+  "responseStatus": 200,
+  "responderId": null,
+  "exception_code": null,
+  "matches": [
+   {
+    "id": "424153647",
+    "segment": "猫",
+    "translation": "Felis silvestris catus",
+    "source": "ja-JP",
+    "target": "es-ES",
+    "quality": "80",
+    "reference": null,
+    "usage-count": 2,
+    "subject": "All",
+    "created-by": "Wikipedia",
+    "last-updated-by": "Wikipedia",
+    "create-date": "2013-09-29 02:34:55",
+    "last-update-date": "2013-09-29 02:34:55",
+    "match": 1,
+    "penalty": 0
+   },
+   {
+    "id": "165564500",
+    "segment": "猫",
+    "translation": "gato",
+    "source": "ja-JP",
+    "target": "es-ES",
+    "quality": "0",
+    "reference": null,
+    "usage-count": 2,
+    "subject": "General",
+    "created-by": "marco",
+    "last-updated-by": "marco",
+    "create-date": "2009-07-01 09:26:46",
+    "last-update-date": "2009-07-01 09:26:46",
+    "match": 1,
+    "penalty": 0
+   },
+   {
+    "id": "425524090",
+    "segment": "猫",
+    "translation": "Felis catus",
+    "source": "ja-JP",
+    "target": "es-ES",
+    "quality": "0",
+    "reference": null,
+    "usage-count": 9,
+    "subject": "Medical",
+    "created-by": "MateCat",
+    "last-updated-by": "MateCat",
+    "create-date": "2014-12-09 13:44:27",
+    "last-update-date": "2014-12-09 13:44:27",
+    "match": 0.99,
+    "penalty": 0
+   }
+  ]
+ }
+}

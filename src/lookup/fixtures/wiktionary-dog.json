@@ -1,0 +1,18 @@
+{
+ "url": "https://es.wiktionary.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&origin=*&titles=dog",
+ "captured": "2026-10-22",
+ "status": 200,
+ "body": {
+  "batchcomplete": "",
+  "query": {
+   "pages": {
+    "730": {
+     "pageid": 730,
+     "ns": 0,
+     "title": "dog",
+     "extract": "\n== Bretón ==\n\n\n=== Forma flexiva ===\n\n\n==== Forma sustantiva ====\n1\nMutación suave del sustantivo masculino tog ('sombrero')\nEjemplo: \n\n\n== Inglés ==\n\n\n=== Etimología ===\nDel inglés medio dogge, a su vez del inglés antiguo docga, dogga.\n\n\n=== Sustantivo ===\ndog (contable e incontable) ¦ plural: dogs\n\n1 Mamíferos\nPerro.\nHembra: bitch\n\n\n=== Verbo transitivo ===\n2\nPerseguir con perros\n3\nAcosar con perros.\n4\nCazar con perros\n5\nAcosar, perseguir.\n6\nInquietar.\n7\nSeguir.\n\n\n=== Compuestos ===\ndogbane\ndogcart\ndogfight\n\n\n=== Locuciones ===\nbarking dogs seldom bite: perro ladrador, poco mordedor o perro que ladra no muerde.\nhair of the dog\nlet sleeping dogs lie: no revolver el asunto; no volver a revivir un asunto espinoso.\ntop dog: mandamás, jefe\n\n\n=== Conjugación ===\n\n\n== Volapuk ==\n\n\n=== Etimología ===\nDel inglés dog.\n\n\n=== Sustantivo ===\n1 Mamíferos\nPerro.\n\n\n==== Declinación ====\n\n\n== Referencias y notas =="
+    }
+   }
+  }
+ }
+}

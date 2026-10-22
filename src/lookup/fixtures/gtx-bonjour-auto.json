@@ -1,0 +1,48 @@
+{
+ "url": "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=es&dt=t&dt=bd&q=bonjour",
+ "captured": "2026-10-22",
+ "status": 200,
+ "body": [
+  [
+   [
+    "buen día",
+    "bonjour",
+    null,
+    null,
+    3,
+    null,
+    null,
+    [
+     []
+    ],
+    [
+     [
+      [
+       "e050167b38f2a566522b4157651fc616",
+       "en_es_2023q1.md"
+      ]
+     ]
+    ]
+   ]
+  ],
+  null,
+  "en",
+  null,
+  null,
+  null,
+  0.7584857,
+  [],
+  [
+   [
+    "en"
+   ],
+   null,
+   [
+    0.7584857
+   ],
+   [
+    "en"
+   ]
+  ]
+ ]
+}

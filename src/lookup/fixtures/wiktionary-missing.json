@@ -1,0 +1,17 @@
+{
+ "url": "https://es.wiktionary.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&origin=*&titles=qzxwvk",
+ "captured": "2026-10-22",
+ "status": 200,
+ "body": {
+  "batchcomplete": "",
+  "query": {
+   "pages": {
+    "-1": {
+     "ns": 0,
+     "title": "qzxwvk",
+     "missing": ""
+    }
+   }
+  }
+ }
+}

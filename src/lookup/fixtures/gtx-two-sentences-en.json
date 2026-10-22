@@ -1,0 +1,30 @@
+{
+ "url": "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=es&dt=t&dt=bd&q=Hello%20there.%20How%20are%20you%20today%3F",
+ "captured": "2026-10-22",
+ "status": 200,
+ "body": [
+  [
+   [
+    "Hola. ",
+    "Hello there. ",
+    null,
+    null,
+    10
+   ],
+   [
+    "¿Cómo estás hoy?",
+    "How are you today?",
+    null,
+    null,
+    10
+   ]
+  ],
+  null,
+  "en",
+  null,
+  null,
+  null,
+  null,
+  []
+ ]
+}

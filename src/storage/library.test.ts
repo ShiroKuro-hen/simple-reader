@@ -1,0 +1,133 @@
+import { createHash } from 'node:crypto';
+import { describe, expect, it } from 'vitest';
+import { fixtureBytes, fixtureFile } from '../reader/fixtures/load';
+import { memoryStorage } from './opfs';
+import { createLibrary } from './library';
+
+/** A library over a fresh in-memory store with a clock that ticks once per call. */
+function setup() {
+  const fs = memoryStorage();
+  let t = 1000;
+  return { fs, lib: createLibrary(fs, () => t++) };
+}
+
+describe('addBook', () => {
+  it('identifies a book by the SHA-256 of its content and reads its metadata', async () => {
+    const { lib } = setup();
+    const meta = await lib.addBook(fixtureFile('book-en.epub'));
+    expect(meta.id).toBe(createHash('sha256').update(fixtureBytes('book-en.epub')).digest('hex'));
+    expect(meta).toMatchObject({ title: 'The Lighthouse & the Sea', author: 'Ada Marlowe', format: 'epub' });
+    expect(meta.size).toBe(fixtureBytes('book-en.epub').length);
+  });
+
+  it('keeps Japanese titles and authors intact', async () => {
+    const { lib } = setup();
+    const meta = await lib.addBook(fixtureFile('book-ja.epub'));
+    expect(meta).toMatchObject({ title: '吾輩は猫である', author: '夏目漱石' });
+    expect(meta.cover).toBeUndefined();
+  });
+
+  it('adding the same bytes under another name returns the same book and stores it once', async () => {
+    const { fs, lib } = setup();
+    const first = await lib.addBook(fixtureFile('book-en.epub'));
+    const again = await lib.addBook(fixtureFile('book-en-copy.epub'));
+    expect(again).toEqual(first);
+    expect((await lib.listBooks()).length).toBe(1);
+    expect(await fs.list('books/')).toEqual([`books/${first.id}.epub`]);
+  });
+
+  it('stores the exact bytes and returns them as a Blob', async () => {
+    const { lib } = setup();
+    const { id } = await lib.addBook(fixtureFile('book-en.epub'));
+    const back = new Uint8Array(await (await lib.getBookBlob(id)).arrayBuffer());
+    expect(Array.from(back)).toEqual(Array.from(fixtureBytes('book-en.epub')));
+  });
+
+  it('takes a PDF without readable metadata and titles it from the file name', async () => {
+    const { lib } = setup();
+    const meta = await lib.addBook(fixtureFile('corrupt.pdf', '日本語_の本.pdf'));
+    expect(meta).toMatchObject({ title: '日本語 の本', format: 'pdf' });
+  });
+
+  it('refuses files that cannot be books and stores nothing for them', async () => {
+    const { fs, lib } = setup();
+    await expect(lib.addBook(fixtureFile('corrupt.epub'))).rejects.toThrow(/epub/i);
+    await expect(lib.addBook(fixtureFile('empty.epub'))).rejects.toThrow(/empty/i);
+    await expect(lib.addBook(new File(['hi'], 'notes.txt'))).rejects.toThrow(/unsupported/i);
+    expect(await fs.list('')).toEqual([]);
+  });
+});
+
+describe('listBooks', () => {
+  it('lists the most recently added first', async () => {
+    const { lib } = setup();
+    await lib.addBook(fixtureFile('book-ja.epub'));
+    await lib.addBook(fixtureFile('book-en.epub'));
+    await lib.addBook(fixtureFile('corrupt.pdf', 'third.pdf'));
+    expect((await lib.listBooks()).map((b) => b.title)).toEqual(['third', 'The Lighthouse & the Sea', '吾輩は猫である']);
+  });
+
+  it('skips a damaged metadata file instead of failing the whole library', async () => {
+    const { fs, lib } = setup();
+    const { id } = await lib.addBook(fixtureFile('book-en.epub'));
+    await fs.write('meta/broken.json', '{not json');
+    expect((await lib.listBooks()).map((b) => b.id)).toEqual([id]);
+  });
+});
+
+describe('removeBook', () => {
+  it('deletes the file, metadata and progress of that book only', async () => {
+    const { fs, lib } = setup();
+    const en = await lib.addBook(fixtureFile('book-en.epub'));
+    const ja = await lib.addBook(fixtureFile('book-ja.epub'));
+    await lib.saveProgress({ bookId: en.id, location: 'x', fraction: 0.1, updatedAt: 1 });
+    await lib.saveProgress({ bookId: ja.id, location: 'y', fraction: 0.2, updatedAt: 1 });
+    await lib.removeBook(en.id);
+    expect((await lib.listBooks()).map((b) => b.id)).toEqual([ja.id]);
+    expect(await lib.getProgress(en.id)).toBeNull();
+    expect(await lib.getProgress(ja.id)).not.toBeNull();
+    expect((await fs.list('')).every((p) => !p.includes(en.id))).toBe(true);
+    await expect(lib.getBookBlob(en.id)).rejects.toThrow();
+  });
+
+  it('is a no-op for an unknown id', async () => {
+    const { lib } = setup();
+    await lib.removeBook('f'.repeat(64));
+  });
+});
+
+describe('progress', () => {
+  it('round-trips and keeps the latest save', async () => {
+    const { lib } = setup();
+    const p = { bookId: 'abc', location: 'epubcfi(/6/4!/4/2/1:0)', fraction: 0.42, updatedAt: 5 };
+    expect(await lib.getProgress('abc')).toBeNull();
+    await lib.saveProgress(p);
+    expect(await lib.getProgress('abc')).toEqual(p);
+    await lib.saveProgress({ ...p, fraction: 0.5, updatedAt: 6 });
+    expect((await lib.getProgress('abc'))?.fraction).toBe(0.5);
+  });
+
+  it('reads a damaged progress file as no progress', async () => {
+    const { fs, lib } = setup();
+    await fs.write('progress/abc.json', '');
+    expect(await lib.getProgress('abc')).toBeNull();
+  });
+});
+
+describe('settings', () => {
+  it('defaults to a light theme at 100% with furigana off', async () => {
+    expect(await setup().lib.getSettings()).toEqual({ theme: 'light', fontSize: 100, furigana: 'off' });
+  });
+
+  it('round-trips what was saved', async () => {
+    const { lib } = setup();
+    await lib.saveSettings({ theme: 'sepia', fontSize: 120, furigana: 'romaji' });
+    expect(await lib.getSettings()).toEqual({ theme: 'sepia', fontSize: 120, furigana: 'romaji' });
+  });
+
+  it('survives a corrupt settings file', async () => {
+    const { fs, lib } = setup();
+    await fs.write('settings.json', 'oops');
+    expect((await lib.getSettings()).theme).toBe('light');
+  });
+});

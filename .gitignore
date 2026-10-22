@@ -1,0 +1,11 @@
+node_modules
+dist
+*.log
+.env
+.DS_Store
+
+# real books used for manual/local checks, never committed
+.local/
+*.local.epub
+*.local.pdf
+.vitest/

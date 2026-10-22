@@ -1,0 +1,23 @@
+{
+ "url": "https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=es&dt=t&dt=bd&q=%E7%8C%AB",
+ "captured": "2026-10-22",
+ "status": 200,
+ "body": [
+  [
+   [
+    "gato",
+    "猫",
+    null,
+    null,
+    11
+   ]
+  ],
+  null,
+  "ja",
+  null,
+  null,
+  null,
+  null,
+  []
+ ]
+}

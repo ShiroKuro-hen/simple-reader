@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>simple-reader</title>
+    <meta name="theme-color" content="#f6f5f1" />
+    <meta name="description" content="A clean, local-first EPUB and PDF reader." />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <script>
+      // Set the theme before first paint so there is no light flash in dark mode.
+      (function () {
+        var t = null;
+        try { t = localStorage.getItem('sr.theme'); } catch (e) {}
+        if (t !== 'light' && t !== 'dark' && t !== 'sepia') {
+          t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

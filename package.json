@@ -1,0 +1,28 @@
+{
+  "name": "simple-reader",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A clean, local-first EPUB and PDF reader with instant word lookup, Spanish translation and Japanese furigana.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "playwright": "^1.64.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  },
+  "dependencies": {
+    "aws4fetch": "^1.0.20",
+    "kuromoji": "^0.1.2",
+    "kuroshiro": "^1.2.1",
+    "pdfjs-dist": "^6.4.299"
+  }
+}

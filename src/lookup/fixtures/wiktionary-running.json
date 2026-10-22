@@ -1,0 +1,18 @@
+{
+ "url": "https://es.wiktionary.org/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&origin=*&titles=running",
+ "captured": "2026-10-22",
+ "status": 200,
+ "body": {
+  "batchcomplete": "",
+  "query": {
+   "pages": {
+    "62310": {
+     "pageid": 62310,
+     "ns": 0,
+     "title": "running",
+     "extract": "\n== Inglés ==\n\n\n=== Etimología ===\n\n\n==== Sustantivo ====\nrunning (contable e incontable) ¦ plural: runnings\n\n2\nCorrida.\n3\nCarrera.\n4\nAdministración, dirección.\n5\nCorriente de un fluido.\n\n\n==== Adjetivo ====\n6\nCorriendo.\n7\nQue está en movimiento o creciendo.\n8\nOperacional, funcional.\n9\nQue está en estado líquido.\n10\nEl actual.\n11\nQue se repite continuamente.\n\n\n==== Adverbio ====\n12\nSucesivamente.\n\n\n=== Forma flexiva ===\n\n\n==== Forma verbal ====\n1\nParticipio presente y gerundio del verbo (to) run.\n\n\n== Referencias y notas =="
+    }
+   }
+  }
+ }
+}

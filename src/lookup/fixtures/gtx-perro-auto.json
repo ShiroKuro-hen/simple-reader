@@ -1,0 +1,35 @@
+{
+ "url": "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=es&dt=t&dt=bd&q=perro",
+ "captured": "2026-10-22",
+ "status": 200,
+ "body": [
+  [
+   [
+    "perro",
+    "perro",
+    null,
+    null,
+    5
+   ]
+  ],
+  null,
+  "es",
+  null,
+  null,
+  null,
+  0.96850395,
+  [],
+  [
+   [
+    "es"
+   ],
+   null,
+   [
+    0.96850395
+   ],
+   [
+    "es"
+   ]
+  ]
+ ]
+}
