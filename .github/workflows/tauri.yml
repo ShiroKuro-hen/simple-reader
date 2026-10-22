@@ -23,7 +23,7 @@ jobs:
           workspaces: src-tauri
       - run: npm ci
       - run: npx tauri build
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: simple-reader-windows
           path: |
@@ -68,7 +68,7 @@ jobs:
             echo "$manifest" | grep -q "$action" || { echo "missing $action in the built manifest"; exit 1; }
           done
           unzip -p "$apk" 'classes*.dex' | grep -aq SRIntent || { echo "Incoming.kt is not in the dex"; exit 1; }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: simple-reader-android
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
