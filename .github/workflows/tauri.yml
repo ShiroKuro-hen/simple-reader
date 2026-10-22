@@ -3,7 +3,7 @@ name: Tauri (Windows + Android)
 on:
   workflow_dispatch:
   push:
-    branches: [tauri]
+    branches: [tauri, tauri-open-with]
     tags: ['v*']
 
 permissions:
@@ -56,8 +56,18 @@ jobs:
           workspaces: src-tauri
       - run: npm ci
       - run: npx tauri android init --ci
+      # "Open with" / "Share to": adds intent filters, the MainActivity hooks and Incoming.kt. Fails if the template changed.
+      - run: node src-tauri/android-patches/apply.mjs
       # Debug build: signed with the auto-generated debug key, so the APK is installable as is.
       - run: npx tauri android build --apk --debug --target aarch64
+      - name: The APK must declare the Open with / Share filters
+        run: |
+          apk=$(find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' | head -n1)
+          manifest=$("$ANDROID_HOME/build-tools/35.0.0/aapt2" dump xmltree --file AndroidManifest.xml "$apk")
+          for action in android.intent.action.VIEW android.intent.action.SEND android.intent.action.SEND_MULTIPLE; do
+            echo "$manifest" | grep -q "$action" || { echo "missing $action in the built manifest"; exit 1; }
+          done
+          unzip -p "$apk" 'classes*.dex' | grep -aq SRIntent || { echo "Incoming.kt is not in the dex"; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: simple-reader-android
