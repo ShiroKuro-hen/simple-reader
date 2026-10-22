@@ -383,15 +383,35 @@ async (page, ctx = {}) => {
     await page.setViewportSize({ width: 1280, height: 800 });
   });
 
+  await step('library clears the system bars: header and content follow the safe-area insets (phone status/nav bars)', async () => {
+    await backToLibrary();
+    // A desktop browser has no insets: set the variables env() feeds, as Android's WebView does (35px top / 48px bottom on a Redmi Note 12).
+    await page.evaluate(() => {
+      const r = document.documentElement.style;
+      r.setProperty('--safe-top', '40px'); r.setProperty('--safe-bottom', '30px'); r.setProperty('--safe-left', '10px'); r.setProperty('--safe-right', '12px');
+    });
+    const measure = () => page.evaluate(() => {
+      const px = (sel, prop) => parseFloat(getComputedStyle(document.querySelector(sel))[prop]);
+      return { headTop: px('.lib-head', 'paddingTop'), headLeft: px('.lib-head', 'paddingLeft'), headRight: px('.lib-head', 'paddingRight'), mainBottom: px('.lib-main', 'paddingBottom'), mainLeft: px('.lib-main', 'paddingLeft') };
+    });
+    let m;
+    await until(async () => ((m = await measure()).headTop >= 40 + 12 && m), 'the header to follow the top inset', 4000)
+      .catch(() => { throw new Error('header padding-top does not include the top inset: ' + JSON.stringify(m)); });
+    ok(m.headLeft >= 16 + 10 && m.headRight >= 16 + 12, 'header ignores the side insets: ' + JSON.stringify(m));
+    ok(m.mainBottom >= 64 + 30, 'content ends under the navigation bar: ' + JSON.stringify(m));
+    ok(m.mainLeft >= 16 + 10, 'content ignores the side inset: ' + JSON.stringify(m));
+    await page.evaluate(() => ['--safe-top', '--safe-bottom', '--safe-left', '--safe-right'].forEach((v) => document.documentElement.style.removeProperty(v)));
+  });
+
   await step('narrowest phone (360) and wide desktop (1440): library and reader never scroll sideways, library targets stay 44px', async () => {
     for (const width of [360, 1440]) {
-      await backToLibrary();
+      if (await page.locator('.reader').count()) await backToLibrary(); // the step before may already have left us in the library
       await page.setViewportSize({ width, height: 800 });
       await sleep(300);
       ok((await overflowX()) <= 0, 'library scrolls horizontally at ' + width);
       const small = await page.evaluate(() => [...document.querySelectorAll('.lib button, .lib .icon-btn')].filter((b) => b.offsetParent && (b.getBoundingClientRect().height < 43.5 || b.getBoundingClientRect().width < 43.5)).map((b) => b.className + ':' + b.textContent.trim()));
       ok(small.length === 0, 'small targets at ' + width + ': ' + small.join(', '));
-      await page.getByRole('button', { name: /^Open The Lighthouse/ }).click();
+      await page.getByRole('button', { name: /^Open The Lighthouse/ }).click({ timeout: 8000 }).catch(async (e) => { throw new Error('open at ' + width + 'px: ' + (await page.locator('.lib-main').innerText().catch(() => '?')).slice(0, 200).split('\n').join(' | ') + ' // ' + String(e.message).split('\n')[0]); });
       await page.locator('.reader').waitFor();
       await until(async () => !(await page.locator('.loading').count()), 'book to load', 20000);
       ok((await overflowX()) <= 0, 'reader scrolls horizontally at ' + width);
