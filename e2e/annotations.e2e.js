@@ -5,7 +5,7 @@
 // annotate row is asserted, never provider text.
 async (page, env = {}) => {
   const BASE = env.BASE ?? 'http://localhost:5199/';
-  const FIX = 'C:/Users/CLL36/Desktop/simple-reader/src/reader/fixtures/';
+  const FIX = String(env.ROOT ?? 'C:/Users/CLL36/Desktop/simple-reader').split('\\').join('/').replace(/\/*$/, '/') + 'src/reader/fixtures/';
   const results = [];
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const ok = (cond, msg) => { if (!cond) throw new Error(msg); };

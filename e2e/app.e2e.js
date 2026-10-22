@@ -209,12 +209,16 @@ async (page, ctx = {}) => {
       s.dispatchEvent(new Event('change', { bubbles: true }));
     });
     await until(async () => { const n = parseInt(await pct()); return n >= 40 && n <= 60; }, 'about 50%');
-    await page.keyboard.press('Tab'); // chrome visible
-    await page.getByRole('button', { name: 'Contents' }).click();
-    ok((await page.locator('dialog[open] .toc-item').count()) === 3, 'expected 3 chapters');
-    await page.getByRole('button', { name: 'Chapter Three' }).click();
-    ok((await page.locator('dialog[open]').count()) === 0, 'contents sheet stayed open');
-    await until(async () => /Three/.test(await text('.chapter')), 'chapter label to say Three');
+    // foliate ignores a jump requested while it is still settling: retry like a user would
+    for (let i = 0; i < 3; i++) {
+      await page.keyboard.press('Tab'); // chrome visible
+      await page.getByRole('button', { name: 'Contents' }).click();
+      ok((await page.locator('dialog[open] .toc-item').count()) === 3, 'expected 3 chapters');
+      await page.getByRole('button', { name: 'Chapter Three' }).click();
+      ok((await page.locator('dialog[open]').count()) === 0, 'contents sheet stayed open');
+      if (await until(async () => /Three/.test(await text('.chapter')), '', 5000).then(() => true, () => false)) return;
+    }
+    throw new Error('chapter label never said Three');
   });
 
   await step('chrome auto-hides, mouse move brings it back', async () => {
@@ -243,7 +247,7 @@ async (page, ctx = {}) => {
     await page.mouse.dblclick(w.x, w.y);
     await page.locator('.popup:not([hidden])').waitFor({ timeout: 5000 });
     const seen = [await page.locator('.popup').getAttribute('data-state')];
-    const state = await until(async () => { const s = await page.locator('.popup').getAttribute('data-state'); return s !== 'loading' && s; }, 'lookup to settle', 20000);
+    const state = await until(async () => { const s = await page.locator('.popup').getAttribute('data-state'); return s !== 'loading' && s; }, 'lookup to settle', 45000); // providers time out at 8s each, a datacenter IP may be refused by all of them
     seen.push(state);
     const box = await page.locator('.popup').boundingBox();
     ok(box.x >= 0 && box.y >= 0 && box.x + box.width <= 1280 && box.y + box.height <= 800, 'popup outside viewport ' + JSON.stringify(box));

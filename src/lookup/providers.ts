@@ -60,7 +60,9 @@ async function chromeTranslate(text: string, from: Source): Promise<Translation 
   if (!T || from === 'auto') return undefined;
   const opts = { sourceLanguage: from, targetLanguage: 'es' };
   // Only when the model is already on the device: creating one would trigger a download.
-  if ((await T.availability(opts).catch(() => 'unavailable')) !== 'available') return undefined;
+  // availability() can hang (seen on headless Linux Chromium): never let it stall a lookup.
+  const state = await Promise.race([T.availability(opts).catch(() => 'unavailable'), new Promise((r) => setTimeout(() => r('unavailable'), 1500))]);
+  if (state !== 'available') return undefined;
   const translator = await T.create(opts);
   return { text: await translator.translate(text), alternatives: [], provider: 'Chrome Translator' };
 }
