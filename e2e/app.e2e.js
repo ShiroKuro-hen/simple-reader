@@ -7,9 +7,9 @@
 //
 // Lookup results come from live providers, so the popup assertions check its *states*
 // (loading -> result | error), never provider text.
-async (page) => {
-  const BASE = 'http://localhost:5199/';
-  const FIX = 'C:/Users/CLL36/Desktop/simple-reader/src/reader/fixtures/';
+async (page, ctx = {}) => {
+  const BASE = ctx.BASE ?? 'http://localhost:5199/';
+  const FIX = String(ctx.ROOT ?? 'C:/Users/CLL36/Desktop/simple-reader').split('\\').join('/').replace(/\/*$/, '/') + 'src/reader/fixtures/';
   const results = [];
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const ok = (cond, msg) => { if (!cond) throw new Error(msg); };
@@ -84,6 +84,15 @@ async (page) => {
       if (now) return now;
     }
     throw new Error(key + ' did not turn the page (stayed at ' + before + ')');
+  }
+  async function clickUntilTurn(selector, before) {
+    // same settling race as the keys: foliate ignores a turn requested mid-animation
+    for (let i = 0; i < 4; i++) {
+      await page.locator(selector).click();
+      const now = await until(async () => (await pct()) !== before && (await pct()), '', 1200).catch(() => null);
+      if (now) return now;
+    }
+    throw new Error(selector + ' did not turn the page (stayed at ' + before + ')');
   }
   async function openFromLibrary(titlePart) {
     const card = titlePart ? page.getByRole('button', { name: new RegExp(`^Open ${titlePart}`) }) : page.locator('.card-open').first();
@@ -173,8 +182,7 @@ async (page) => {
     let p = await pct();
     const seen = [p];
     for (const key of ['ArrowRight', 'PageDown', 'Space']) { p = await pressUntilTurn(key, p); seen.push(p); }
-    await page.locator('.edge-r').click();
-    p = await waitPageChange(p).catch(() => { throw new Error('edge click did not turn the page: ' + seen.join(' ')); }); seen.push(p);
+    p = await clickUntilTurn('.edge-r', p).catch(() => { throw new Error('edge click did not turn the page: ' + seen.join(' ')); }); seen.push(p);
     const forward = p;
     for (const key of ['ArrowLeft', 'PageUp', 'Shift+Space']) { p = await pressUntilTurn(key, p); seen.push(p); }
     await page.locator('.edge-l').click().catch(() => {});

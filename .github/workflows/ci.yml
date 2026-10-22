@@ -8,6 +8,45 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    env:
+      # Throwaway credentials for the disposable S3 server started below; src/sync/r2.s3.test.ts reads these.
+      S3_TEST_ENDPOINT: http://127.0.0.1:9000
+      S3_TEST_BUCKET: sr-test
+      S3_TEST_ACCESS_KEY: ci-access-key
+      S3_TEST_SECRET_KEY: ci-secret-key-0123456789
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # A real S3 server for the sync tests (MinIO's public images were withdrawn; RustFS is a
+      # drop-in S3 server). A `services:` container cannot be given a start command, so docker run.
+      # The tests create their own buckets through the S3 API.
+      - name: Start S3 server
+        run: |
+          docker run -d --name s3 -p 127.0.0.1:9000:9000 \
+            -e RUSTFS_ACCESS_KEY="$S3_TEST_ACCESS_KEY" \
+            -e RUSTFS_SECRET_KEY="$S3_TEST_SECRET_KEY" \
+            rustfs/rustfs:1.0.3
+          for i in $(seq 1 60); do
+            curl -s -o /dev/null "$S3_TEST_ENDPOINT/" && exit 0
+            sleep 1
+          done
+          docker logs s3
+          echo "S3 server did not come up" >&2
+          exit 1
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: S3 server logs on failure
+        if: failure()
+        run: docker logs s3
+
+  e2e:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -16,6 +55,4 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
+      - run: npm run e2e

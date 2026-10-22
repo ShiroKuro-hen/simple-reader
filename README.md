@@ -29,15 +29,19 @@ Most readers either do a lot and get in the way, or do little and send your libr
 - **Select any word to look it up:** definition and Spanish translation in a popup.
 - **Japanese support:** hiragana reading and romaji on select, plus a furigana-over-kanji mode.
 - **Local-first:** books are files on your device (browser OPFS). No account, no database.
-- **Optional backup/sync** to your own free Cloudflare R2 bucket. It never deletes anything, and the newest reading progress wins.
-- **Runs as a web app** in the browser.
+- **Highlights, notes and bookmarks:** four highlight colours and notes on EPUB text, page bookmarks in EPUB and PDF, a side panel to browse and jump, and export to Markdown (with a copy button) for your notes app.
+- **Library:** search by title, author or tag (accent-insensitive, Japanese-safe), tags, sorting, and recently read.
+- **Optional backup/sync** to your own free Cloudflare R2 bucket. It never deletes anything; the newest reading progress wins and highlights are merged one by one, so two devices never lose each other's notes.
+- **Installable and offline:** a PWA that opens without a connection once visited. Japanese reading works offline after the first Japanese lookup.
+- **Runs as a web app** in the browser, with Windows and Android builds produced by CI (see below).
 
 | Platform | Status |
 |---|---|
 | Web app | Available (v0.1) |
-| Installable PWA / offline | Planned |
-| Desktop (Windows, macOS, Linux) via Tauri v2 | Planned |
-| Android APK via Tauri v2 | Planned |
+| Installable PWA / offline | Available |
+| Windows installer (Tauri v2) | Built by CI, unsigned, not yet tested as an installed app |
+| Android APK (Tauri v2) | Built by CI (debug, arm64), not yet tested on a device |
+| macOS, Linux, iOS | Not planned yet |
 
 ## Quick start
 
@@ -47,11 +51,11 @@ npm run dev      # start the dev server
 npm run build    # typecheck and build to dist/
 ```
 
-Run the tests with `npm test`.
+Run the unit tests with `npm test` and the real-browser suites (Chromium via Playwright) with `npm run e2e`. See [docs/DESKTOP-AND-ANDROID.md](docs/DESKTOP-AND-ANDROID.md) for the native builds.
 
 ## Usage
 
-Open an EPUB or PDF from the library screen (file picker or drag and drop). Select a word or phrase to open the lookup popup. Theme, font size, page layout and furigana mode live in the settings panel. Your last position in each book is remembered.
+Open an EPUB or PDF from the library screen (file picker or drag and drop). Select a word or phrase to open the lookup popup. Theme, font size, page layout and furigana mode live in the settings panel. Your last position in each book is remembered. Select text to highlight it in a colour or add a note; the bookmark button and the annotations panel are in the reader's top bar. PDFs support page bookmarks only for now.
 
 | Action | Keys |
 |---|---|
@@ -100,12 +104,13 @@ Taken from [PLAN.md](PLAN.md) (written in Spanish). Checked means it exists toda
 - [x] Open EPUB and PDF, paginated reading, themes, font size, remember position
 - [x] Word lookup with Spanish translation, Japanese reading, romaji and furigana
 - [x] Optional R2 backup and sync
-- [ ] Library: import folders, tags and shelves, search across books
-- [ ] Highlights, notes and bookmarks
+- [x] Library search, tags and sorting
+- [ ] Library: import whole folders, search inside the text of every book
+- [x] Highlights, notes and bookmarks in EPUB (PDF: bookmarks only; PDF highlights pending)
 - [ ] Scriptable core: CLI, local API, export templates, rules
 - [ ] Deep customisation: custom CSS, reading profiles, remappable keys, user dictionaries
-- [ ] PWA with offline support
-- [ ] Desktop and Android builds with Tauri v2
+- [x] PWA with offline support
+- [ ] Desktop and Android: CI builds exist; test on real devices, sign releases, check lookups under the native origin
 - [ ] Other sync backends (WebDAV, shared folder) and OPDS
 - [ ] Extras: TTS, MOBI/FB2/CBZ, OCR
 

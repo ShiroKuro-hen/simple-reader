@@ -131,3 +131,40 @@ describe('settings', () => {
     expect((await lib.getSettings()).theme).toBe('light');
   });
 });
+
+describe('annotations', () => {
+  const note = (over = {}) => ({
+    id: 'n1', bookId: 'abc', kind: 'note' as const, location: 'epubcfi(/6/4!/4/2,/1:0,/1:5)', text: 'héllo 😀',
+    note: 'a note', color: 'blue' as const, createdAt: 1, updatedAt: 2, ...over,
+  });
+
+  it('round-trips as annotations/<bookId>.json, tombstones included', async () => {
+    const { fs, lib } = setup();
+    expect(await lib.getAnnotations('abc')).toEqual({ bookId: 'abc', items: [] });
+    const file = { bookId: 'abc', items: [note(), note({ id: 'n2', deleted: true })] };
+    await lib.saveAnnotations(file);
+    expect(await lib.getAnnotations('abc')).toEqual(file);
+    expect(await fs.list('annotations/')).toEqual(['annotations/abc.json']);
+  });
+
+  it('keeps books apart', async () => {
+    const { lib } = setup();
+    await lib.saveAnnotations({ bookId: 'abc', items: [note()] });
+    expect((await lib.getAnnotations('other')).items).toEqual([]);
+  });
+
+  it.each(['', '{not json', 'null', '[]', '{"items": 7}'])('reads a damaged file (%j) as empty', async (content) => {
+    const { fs, lib } = setup();
+    await fs.write('annotations/abc.json', content);
+    expect(await lib.getAnnotations('abc')).toEqual({ bookId: 'abc', items: [] });
+  });
+
+  it('removing a book removes its annotations and no one else\'s', async () => {
+    const { fs, lib } = setup();
+    const en = await lib.addBook(fixtureFile('book-en.epub'));
+    await lib.saveAnnotations({ bookId: en.id, items: [note({ bookId: en.id })] });
+    await lib.saveAnnotations({ bookId: 'other', items: [note({ bookId: 'other' })] });
+    await lib.removeBook(en.id);
+    expect(await fs.list('annotations/')).toEqual(['annotations/other.json']);
+  });
+});

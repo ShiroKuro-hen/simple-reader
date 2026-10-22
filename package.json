@@ -10,7 +10,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "node src/reader/e2e/run.mjs && node e2e/run-annotations.mjs"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

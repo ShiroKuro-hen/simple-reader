@@ -1,4 +1,5 @@
 // Page-side helpers for run.mjs. Exposes the real modules on window.sr; the assertions live in run.mjs.
+import * as annotations from '../../annotations/model';
 import { openBook } from '../index';
 import { storageContract } from '../../storage/contract';
 import { createLibrary } from '../../storage/library';
@@ -59,7 +60,14 @@ function rectOf(s: Session, needle: string) {
   return null;
 }
 
+/** The <g> of every annotation foliate currently draws, over all loaded sections. */
+(window as any).gs = (): SVGGElement[] =>
+  (document.querySelector('foliate-view') as any).renderer
+    .getContents()
+    .flatMap((c: any) => (c.overlayer ? [...c.overlayer.element.querySelectorAll('g')] : []));
+
 (window as any).sr = {
+  annotations,
   storageContract,
   opfsStorage,
   createLibrary,

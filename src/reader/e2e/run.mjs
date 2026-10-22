@@ -435,6 +435,146 @@ await test('pdf: a corrupt file fails to open and leaves the container clean', a
   assert.equal(await ev(() => document.getElementById('host').children.length), 0);
 });
 
+// ---- Annotations in the reader --------------------------------------------------------------------------------
+const note = (location, text, over = {}) => ({
+  id: 'id-' + text, bookId: 'b', kind: 'highlight', location, text, color: 'yellow', createdAt: 1, updatedAt: 1, ...over,
+});
+/** What the foliate overlay currently draws: one entry per annotation with its colour and its boxes in the host viewport. */
+const painted = () =>
+  ev(() =>
+    window.gs().map((g) => ({
+      fill: g.getAttribute('fill'),
+      boxes: [...g.querySelectorAll('rect')].map((r) => {
+        const b = r.getBoundingClientRect();
+        return { x: b.x, y: b.y, width: b.width, height: b.height };
+      }),
+    })),
+  );
+const paintedAround = (boxes, rect) => boxes.some((b) => Math.abs(b.x - rect.x) < 3 && Math.abs(b.width - rect.width) < 6 && b.y < rect.y + rect.height && b.y + b.height > rect.y);
+const setAnnotations = (items) => ev((items) => session.handle.setAnnotations(items), items);
+const waitPainted = (n) => ev((n) => sr.waitFor(() => window.gs().length === n, `${n} painted`), n);
+
+await test('epub: a selection carries its CFI range, and an annotation at that location is painted exactly on the word, in its colour', async () => {
+  await open('book-en.epub');
+  const { sel } = await selectWord('keeper');
+  assert.match(sel.location, /^epubcfi\(\/6\/\d+!.+,.+,.+\)$/, 'a range CFI');
+  await setAnnotations([note(sel.location, 'keeper', { color: 'green' })]);
+  await waitPainted(1);
+  const [one, ...rest] = await painted();
+  assert.equal(rest.length, 0);
+  assert.equal(one.fill, '#6fdc8c');
+  assert.ok(paintedAround(one.boxes, await ev(() => sr.rectOf(session, 'keeper'))), JSON.stringify(one.boxes));
+});
+
+await test('epub: setAnnotations repaints a changed colour, erases removed and deleted items, and never paints bookmarks', async () => {
+  await open('book-en.epub');
+  const { sel } = await selectWord('keeper');
+  await setAnnotations([note(sel.location, 'keeper')]);
+  await waitPainted(1);
+  await setAnnotations([note(sel.location, 'keeper', { color: 'pink', updatedAt: 2 })]);
+  await ev(() => sr.waitFor(() => window.gs()[0]?.getAttribute('fill') === '#ff8fc2', 'pink'));
+  assert.equal((await painted()).length, 1, 'repaint replaces, never stacks');
+  await setAnnotations([note(sel.location, 'keeper', { kind: 'bookmark' })]);
+  await waitPainted(0);
+  await setAnnotations([note(sel.location, 'keeper')]);
+  await waitPainted(1);
+  await setAnnotations([note(sel.location, 'keeper', { deleted: true, updatedAt: 3 })]);
+  await waitPainted(0);
+  await setAnnotations([note(sel.location, 'keeper')]);
+  await waitPainted(1);
+  await setAnnotations([]);
+  await waitPainted(0);
+});
+
+await test('epub: a highlight in another chapter is painted when that chapter loads, also in a freshly opened book', async () => {
+  await open('book-en.epub');
+  const toc = await ev(() => session.handle.toc);
+  await nav('goTo', toc[1].href);
+  const { sel } = await selectWord('storm');
+  await ev(() => session.handle.destroy());
+  await ev(() => document.getElementById('host').replaceChildren());
+  await open('book-en.epub'); // back on chapter one
+  await setAnnotations([note(sel.location, 'storm', { color: 'blue' })]);
+  await page.waitForTimeout(300);
+  assert.deepEqual(await painted(), [], 'nothing painted on a page that does not contain it');
+  await nav('goTo', toc[1].href);
+  await waitPainted(1);
+  const [one] = await painted();
+  assert.equal(one.fill, '#6cb6ff');
+  assert.ok(paintedAround(one.boxes, await ev(() => sr.rectOf(session, 'storm'))));
+});
+
+await test('epub: tapping a highlight reports its id and box; tapping plain text does not', async () => {
+  await open('book-en.epub');
+  const { sel } = await selectWord('keeper');
+  await ev(() => {
+    window.clicks = [];
+    session.handle.onAnnotationClick((id, rect) => clicks.push({ id, rect }));
+  });
+  await setAnnotations([note(sel.location, 'keeper', { id: 'hl-1' })]);
+  await waitPainted(1);
+  await ev(() => session.docs.at(-1).getSelection().removeAllRanges());
+  const other = await ev(() => sr.rectOf(session, 'spiral'));
+  await page.mouse.click(other.x + other.width / 2, other.y + other.height / 2);
+  await page.waitForTimeout(400);
+  assert.equal(await ev(() => clicks.length), 0);
+  const r = await ev(() => sr.rectOf(session, 'keeper'));
+  await page.mouse.click(r.x + r.width / 2, r.y + r.height / 2);
+  await ev(() => sr.waitFor(() => clicks.length > 0, 'an annotation click'));
+  const [c] = await ev(() => clicks);
+  assert.equal(c.id, 'hl-1');
+  assert.ok(Math.abs(c.rect.x - r.x) < 3 && Math.abs(c.rect.width - r.width) < 6 && c.rect.y > 30, JSON.stringify([c.rect, r]));
+});
+
+await test('epub: here() is a point on the current page that the bookmark rules find on that page only', async () => {
+  await open('book-en.epub');
+  const page1 = await last();
+  const here = await ev(() => session.handle.here());
+  assert.match(here.location, /^epubcfi\([^,]+\)$/, 'a point, not a range');
+  assert.match(here.text, /^Chapter One The lighthouse keeper climbed/);
+  assert.equal(here.label, 'Chapter One');
+  const bm = note(here.location, here.text, { kind: 'bookmark' });
+  const on = (loc) => ev(([bm, loc]) => !!sr.annotations.bookmarkOn([bm], loc), [bm, loc]);
+  assert.equal(await on(page1.location), true, 'found on its own page');
+  const page2 = await nav('next');
+  assert.equal(await on(page2.location), false, 'not on the next page');
+  assert.equal(await on((await nav('prev')).location), true, 'found again when coming back');
+  await nav('goToFraction', 0.99);
+  assert.equal(await on((await last()).location), false, 'not in another chapter');
+  await nav('goTo', here.location);
+  assert.equal(await on((await last()).location), true, 'goTo(bookmark) lands on its page');
+});
+
+await test('epub: highlights are tinted for the theme: multiply on paper, a plain tint on the dark page', async () => {
+  await open('book-en.epub');
+  const { sel } = await selectWord('keeper');
+  await setAnnotations([note(sel.location, 'keeper')]);
+  await waitPainted(1);
+  const look = () =>
+    ev(() => {
+      const c = getComputedStyle(window.gs()[0]);
+      return [c.mixBlendMode, c.opacity];
+    });
+  assert.deepEqual(await look(), ['multiply', '0.6']);
+  await ev((s) => session.handle.setSettings(s), THEME('dark'));
+  assert.deepEqual(await look(), ['normal', '0.35']);
+  await ev((s) => session.handle.setSettings(s), THEME('sepia'));
+  assert.deepEqual(await look(), ['multiply', '0.6']);
+});
+
+await test('pdf: here() names the page and its first words; selections have no location; setAnnotations is harmless', async () => {
+  await open('sample.pdf', { location: '3' });
+  const here = await ev(() => session.handle.here());
+  assert.equal(here.location, '3');
+  assert.equal(here.label, 'Page 3');
+  assert.match(here.text, /^Page 3 heading/);
+  const { sel } = await selectWord('harbour');
+  assert.equal(sel.location, undefined);
+  await setAnnotations([note('3', 'harbour')]);
+  await ev(() => session.handle.onAnnotationClick(() => {}));
+  assert.equal(await ev(() => document.querySelectorAll('.sr-pdf svg').length), 0);
+});
+
 await browser.close();
 await server.close();
 const failed = results.filter(([, e]) => e);

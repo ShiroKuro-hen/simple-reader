@@ -92,6 +92,8 @@ export interface TextSelection {
   context: string;
   /** Selection box in the host page's viewport coordinates, to place the popup. */
   rect: { x: number; y: number; width: number; height: number };
+  /** Where the selection is, as an Annotation.location (EPUB CFI range). Absent in PDFs, which have no highlights in v1. */
+  location?: string;
 }
 
 export interface ReaderHandle {
@@ -104,6 +106,12 @@ export interface ReaderHandle {
   setSettings(settings: ReaderSettings): void;
   onSelect(cb: (sel: TextSelection) => void): void;
   onRelocate(cb: (p: { location: string; fraction: number; label?: string }) => void): void;
+  /** Draws the highlights and notes of `items` (not bookmarks) on every section, now and as sections load; removes the ones no longer listed. PDFs draw nothing. */
+  setAnnotations(items: Annotation[]): void;
+  /** The user tapped a drawn highlight; `rect` is its box in the host viewport. */
+  onAnnotationClick(cb: (id: string, rect: TextSelection['rect']) => void): void;
+  /** The current page as a bookmark anchor: a point location (EPUB CFI / PDF page number), the first words on the page, the chapter or page label. */
+  here(): { location: string; text: string; label?: string };
   destroy(): void;
 }
 

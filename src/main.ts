@@ -1,5 +1,8 @@
 import './ui/styles.css';
 import { getSettings, listBooks, saveSettings } from './storage/library';
+import { trackInstallPrompt } from './pwa/install';
+import { registerServiceWorker } from './pwa/register';
+import { showUpdateToast } from './pwa/update-toast';
 import type { ReaderSettings, Theme } from './types';
 import { toast } from './ui/dom';
 import { mountLibrary } from './ui/library-view';
@@ -10,6 +13,9 @@ import type { App } from './ui/settings';
 const THEME_KEY = 'sr.theme'; // also read by the inline script in index.html
 const root = document.getElementById('app')!;
 const dark = matchMedia('(prefers-color-scheme: dark)');
+// Listen before anything async: the browser fires beforeinstallprompt only once, possibly before the library is drawn.
+const install = trackInstallPrompt();
+registerServiceWorker(showUpdateToast);
 
 const storedTheme = (): string | null => {
   try {
@@ -79,7 +85,7 @@ async function boot() {
     unmount = null;
     const id = /^#\/book\/([\w-]+)$/.exec(location.hash)?.[1];
     if (!id) {
-      unmount = mountLibrary(root, app, open);
+      unmount = mountLibrary(root, app, open, install);
       return;
     }
     const book = (await listBooks().catch(() => [])).find((b) => b.id === id);

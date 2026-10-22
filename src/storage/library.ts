@@ -1,4 +1,5 @@
-import type { BookMeta, Progress, ReaderSettings, Storage } from '../types';
+import { readAnnotationFile } from '../annotations/model';
+import type { AnnotationFile, BookMeta, Progress, ReaderSettings, Storage } from '../types';
 import { formatOf, mergeSettings, newestFirst, sha256Hex, titleFromFilename } from './domain';
 import { readEpubInfo } from './epub-info';
 import { storage } from './index';
@@ -79,6 +80,7 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
       fs.remove(`books/${id}.pdf`),
       fs.remove(`meta/${id}.json`),
       fs.remove(`progress/${id}.json`),
+      fs.remove(`annotations/${id}.json`),
     ]);
   }
 
@@ -89,6 +91,9 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
     removeBook,
     saveProgress: (p: Progress) => writeJson(`progress/${p.bookId}.json`, p),
     getProgress: (bookId: string) => readJson<Progress>(`progress/${bookId}.json`),
+    /** Highlights, notes and bookmarks of one book (tombstones included); a damaged file reads as empty. */
+    getAnnotations: async (bookId: string) => readAnnotationFile(await readJson<unknown>(`annotations/${bookId}.json`), bookId),
+    saveAnnotations: (file: AnnotationFile) => writeJson(`annotations/${file.bookId}.json`, file),
     saveSettings: (s: ReaderSettings) => writeJson('settings.json', s),
     async getSettings(): Promise<ReaderSettings> {
       return mergeSettings(await readJson<unknown>('settings.json'));
@@ -96,5 +101,16 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
   };
 }
 
-export const { addBook, listBooks, getBookBlob, removeBook, saveProgress, getProgress, saveSettings, getSettings } =
+export const { addBook, listBooks, getBookBlob, removeBook, saveProgress, getProgress, getAnnotations, saveAnnotations, saveSettings, getSettings } =
   createLibrary(storage);
+
+import { cleanTags } from '../library/tags';
+
+/** Replaces a book's tags (cleaned) and stamps `updatedAt`, so sync keeps the newest edit. `fs` and `clock` are injectable for tests. */
+export async function setTags(id: string, tags: string[], fs: Storage = storage, clock: () => number = Date.now): Promise<BookMeta> {
+  const data = await fs.read(`meta/${id}.json`);
+  if (!data) throw new Error(`Unknown book: ${id}`);
+  const meta: BookMeta = { ...JSON.parse(new TextDecoder().decode(data)), tags: cleanTags(tags), updatedAt: clock() };
+  await fs.write(`meta/${id}.json`, JSON.stringify(meta));
+  return meta;
+}

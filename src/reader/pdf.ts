@@ -138,6 +138,14 @@ export async function openPdf(blob: Blob, container: HTMLElement, opts: OpenBook
     },
     onSelect: selects.on,
     onRelocate: relocates.on,
+    // PDF highlights are not in v1: only bookmarks (a page number), which the view keeps itself.
+    setAnnotations() {},
+    onAnnotationClick() {},
+    here: () => ({
+      location: String(page),
+      text: (textLayerEl.textContent ?? '').replace(/\s+/g, ' ').trim().slice(0, 200),
+      label: `Page ${page}`,
+    }),
     destroy() {
       renderId++;
       renderTask?.cancel();

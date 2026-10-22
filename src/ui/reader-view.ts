@@ -1,5 +1,7 @@
-import type { BookMeta, Progress, ReaderHandle, TocItem } from '../types';
-import { getBookBlob, getProgress, saveProgress } from '../storage/library';
+import { bookmarkOn, createAnnotation, editAnnotation, mergeAnnotationFiles, previewText, putAnnotation, removeAnnotation, upsertMark } from '../annotations';
+import type { Annotation, BookMeta, HighlightColor, Progress, ReaderHandle, TextSelection, TocItem } from '../types';
+import { getAnnotations, getBookBlob, getProgress, saveAnnotations, saveProgress } from '../storage/library';
+import { createAnnotationsPanel } from './annotations-panel';
 import { h, icon, iconButton, sheet, toast } from './dom';
 import { createPopup } from './popup';
 import { fractionFromSlider, keyAction, progressLabel, sliderPosition } from './reading';
@@ -11,11 +13,52 @@ const HIDE_AFTER_MS = 3500;
 export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack: () => void): () => void {
   const ac = new AbortController();
   const docs = new Set<Document>(); // rendered EPUB documents, kept so furigana can be re-applied
-  const popup = createPopup();
   const settings = createSettings(app);
   let handle: ReaderHandle | null = null;
+  let items: Annotation[] = []; // every highlight, note and bookmark of this book, tombstones included
+  let where = { location: '', label: '' }; // the last reported position
+  let writing: Promise<unknown> = Promise.resolve(); // saves run one after the other
   let disposed = false;
   let dragging = false;
+
+  // --- annotations ---
+  function clearSelection() {
+    for (const d of docs) d.getSelection()?.removeAllRanges();
+    document.getSelection()?.removeAllRanges();
+  }
+  function commit(next: Annotation[]) {
+    items = next;
+    handle?.setAnnotations(items);
+    panel.render(items);
+    showBookmarkState();
+    // Merge with the file first: a restore or sync may have changed it since this book was opened.
+    writing = writing
+      .then(async () => saveAnnotations(mergeAnnotationFiles(await getAnnotations(book.id), { bookId: book.id, items: next })))
+      .catch(() => toast("Couldn't save your annotations.", 'error'));
+  }
+  const edit = (id: string, patch: { note?: string; color?: HighlightColor }) => {
+    const a = items.find((i) => i.id === id);
+    if (a) commit(putAnnotation(items, editAnnotation(a, patch, Date.now())));
+  };
+  const mark = (sel: TextSelection, extra: { color?: HighlightColor; note?: string }) => {
+    if (!sel.location) return;
+    commit(upsertMark(items, { bookId: book.id, kind: extra.note ? 'note' : 'highlight', location: sel.location, text: sel.text, chapter: where.label, ...extra }, Date.now()));
+    clearSelection();
+  };
+  const popup = createPopup({
+    highlight: (sel, color) => mark(sel, { color }),
+    note: (sel, note) => mark(sel, { note }),
+    update: edit,
+    remove: (id) => commit(removeAnnotation(items, id, Date.now())),
+  });
+  const panel = createAnnotationsPanel(book, {
+    jump: (a) => {
+      panel.close();
+      handle?.goTo(a.location).catch(() => toast("Couldn't jump there.", 'error'));
+    },
+    setNote: (id, note) => edit(id, { note }),
+    remove: (id) => commit(removeAnnotation(items, id, Date.now())),
+  });
 
   // --- chrome ---
   const stage = h('div', { class: 'stage' });
@@ -27,9 +70,20 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
   const tocBtn = iconButton('list', 'Contents', () => toc.showModal());
   tocBtn.disabled = true;
 
+  const bookmarkBtn = iconButton('bookmark', 'Add bookmark', () => toggleBookmark());
+  bookmarkBtn.disabled = true;
+  bookmarkBtn.setAttribute('aria-pressed', 'false');
+  const notesBtn = iconButton('pencil', 'Annotations', () => {
+    popup.hide();
+    panel.render(items);
+    panel.open();
+  });
+
   const top = h('header', { class: 'bar bar-top' },
     iconButton('back', 'Back to library', onBack),
     h('h1', { class: 'bar-title' }, book.title),
+    bookmarkBtn,
+    notesBtn,
     tocBtn,
     iconButton('settings', 'Reading settings', settings.open));
   const bottom = h('footer', { class: 'bar bar-bottom' }, h('div', { class: 'bar-meta' }, chapter, pct), slider);
@@ -40,7 +94,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
   const hot = (cls: string) => h('div', { class: `hot ${cls}`, 'aria-hidden': 'true', onpointerdown: showChrome, onpointermove: showChrome });
 
   const view = h('div', { class: 'reader' }, stage, loading, edge(-1), edge(1), hot('hot-top'), hot('hot-bottom'), top, bottom);
-  root.replaceChildren(view, settings.el, toc);
+  root.replaceChildren(view, settings.el, toc, panel.el);
 
   // --- auto-hiding chrome ---
   let hideTimer = 0;
@@ -136,6 +190,27 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
     for (const d of docs) d.defaultView ? void applyJapanese(d) : docs.delete(d);
   });
 
+  // --- bookmarks ---
+  function showBookmarkState() {
+    const on = !!bookmarkOn(items, where.location);
+    bookmarkBtn.classList.toggle('on', on);
+    bookmarkBtn.setAttribute('aria-pressed', String(on));
+    const label = on ? 'Remove bookmark' : 'Add bookmark';
+    bookmarkBtn.setAttribute('aria-label', label);
+    bookmarkBtn.title = label;
+  }
+  function toggleBookmark() {
+    if (!handle) return;
+    const existing = bookmarkOn(items, where.location);
+    if (existing) {
+      commit(removeAnnotation(items, existing.id, Date.now()));
+      return toast('Bookmark removed.');
+    }
+    const here = handle.here();
+    commit(putAnnotation(items, createAnnotation({ bookId: book.id, kind: 'bookmark', location: here.location, text: previewText(here.text, 120), chapter: here.label }, Date.now())));
+    toast('Bookmark added.');
+  }
+
   // --- progress ---
   const persist = debounce((p: Progress) => void saveProgress(p).catch(() => {}), 700);
   addEventListener('pagehide', persist.flush, { signal: ac.signal });
@@ -177,10 +252,11 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
   // --- open ---
   void (async () => {
     try {
-      const [{ openBook }, blob, saved] = await Promise.all([
+      const [{ openBook }, blob, saved, notes] = await Promise.all([
         import('../reader/index'),
         getBookBlob(book.id),
         getProgress(book.id).catch(() => null),
+        getAnnotations(book.id).catch(() => ({ bookId: book.id, items: [] as Annotation[] })),
       ]);
       if (disposed) return;
       if (app.settings.furigana !== 'off') void preloadJapanese();
@@ -192,12 +268,21 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
       if (disposed) return opened.destroy();
       handle = opened;
       loading.remove();
+      items = notes.items;
+      opened.setAnnotations(items);
+      opened.onAnnotationClick((id, rect) => {
+        const a = items.find((i) => i.id === id && !i.deleted);
+        if (a) popup.showAnnotation(a, rect);
+      });
       opened.onSelect((sel) => popup.show({ ...sel, text: withoutRuby(sel.text) }));
       let lastLocation = '';
       opened.onRelocate((p) => {
         if (p.location !== lastLocation) popup.hide(); // the reader may repeat a relocate without moving
         lastLocation = p.location;
         chapter.textContent = p.label ?? '';
+        where = { location: p.location, label: p.label ?? '' };
+        bookmarkBtn.disabled = false;
+        showBookmarkState();
         if (!dragging) showFraction(p.fraction);
         persist({ bookId: book.id, location: p.location, fraction: p.fraction, updatedAt: Date.now() });
       });

@@ -2,9 +2,7 @@
 // This file is only I/O (signing, HTTP, listing, copying). Every decision about
 // WHAT to copy lives in ./plan.ts. Credentials are never logged or put in errors.
 //
-// ponytail: this network layer has no automated test (no MinIO/docker daemon was
-// available to run a real S3). Only ./plan.ts and parseList are covered; verify
-// against a real bucket by hand before relying on it.
+// The network layer is tested against a REAL S3 server: see r2.s3.test.ts.
 import { AwsClient } from 'aws4fetch';
 import type { R2Config, Storage } from '../types';
 import { planSync, type Direction, type Snapshot } from './plan';
@@ -44,13 +42,19 @@ export function parseList(xml: string): { keys: string[]; next?: string } {
   return { keys, next: text(xml, 'IsTruncated') === 'true' ? text(xml, 'NextContinuationToken') : undefined };
 }
 
+/** Path-style bucket URL: the custom endpoint when set (tests, other S3 servers), else R2's. */
+export function bucketUrl(cfg: R2Config): string {
+  const host = cfg.endpoint ? cfg.endpoint.replace(/\/+$/, '') : `https://${cfg.accountId}.r2.cloudflarestorage.com`;
+  return `${host}/${cfg.bucket}`;
+}
+
 // --- the bucket ---------------------------------------------------------------------
 function bucket(cfg: R2Config) {
   const client = new AwsClient({ accessKeyId: cfg.accessKeyId, secretAccessKey: cfg.secretAccessKey, service: 's3', region: 'auto' });
-  const base = `https://${cfg.accountId}.r2.cloudflarestorage.com/${cfg.bucket}`;
+  const base = bucketUrl(cfg);
   const enc = (p: string) => p.split('/').map(encodeURIComponent).join('/');
 
-  async function call(method: string, url: string, body?: Uint8Array): Promise<Response> {
+  async function call(method: string, url: string, body?: Uint8Array, notFoundOk = false): Promise<Response> {
     let res: Response;
     try {
       res = await fetch(await client.sign(url, { method, body: body as BodyInit | undefined }));
@@ -60,8 +64,9 @@ function bucket(cfg: R2Config) {
           'Add this in the R2 dashboard (bucket > Settings > CORS policy):\n' + describeCors(),
       );
     }
-    if (!res.ok && res.status !== 404) {
-      const hint = res.status === 403 ? ' (check the API token has Object Read & Write and the keys are right)' : '';
+    if (!res.ok && !(res.status === 404 && notFoundOk)) {
+      const hint =
+        res.status === 403 ? ' (check the API token has Object Read & Write and the keys are right)' : res.status === 404 ? ' (bucket not found: check the bucket name)' : '';
       throw new Error(`R2 ${method} failed: HTTP ${res.status}${hint}`);
     }
     return res;
@@ -80,7 +85,7 @@ function bucket(cfg: R2Config) {
       return keys;
     },
     async get(path: string): Promise<Uint8Array | null> {
-      const res = await call('GET', `${base}/${enc(path)}`);
+      const res = await call('GET', `${base}/${enc(path)}`, undefined, true);
       return res.status === 404 ? null : new Uint8Array(await res.arrayBuffer());
     },
     async put(path: string, data: Uint8Array): Promise<void> {
@@ -90,7 +95,19 @@ function bucket(cfg: R2Config) {
 }
 
 // --- executor: snapshot both sides, ask the domain, copy ------------------------------
-const FILE_PREFIXES = ['meta/', 'progress/', 'settings.json'];
+const FILE_PREFIXES = ['meta/', 'progress/', 'annotations/', 'settings.json'];
+const utf8 = new TextEncoder();
+
+/** Run `fn` over `items`, a few at a time (books are many and the round trips dominate). */
+async function pool<T>(items: T[], size: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(size, items.length) }, async () => {
+      while (next < items.length) await fn(items[next++]!);
+    }),
+  );
+}
+const PARALLEL = 6;
 const dec = new TextDecoder();
 
 interface Side {
@@ -115,18 +132,24 @@ async function run(direction: Direction, cfg: R2Config, storage: Storage): Promi
   const r2 = bucket(cfg);
   const local: Side = { list: (p) => storage.list(p), get: (p) => storage.read(p) };
   const plan = planSync(direction, await snapshot(local), await snapshot(r2));
+  // annotations are merged two-way whatever the direction; the count is what this call wrote to the side it syncs TO
+  const writes = plan.merge.filter((m) => (direction === 'push' ? m.remote : m.local));
+  await pool(plan.merge, PARALLEL, async (m) => {
+    if (m.remote) await r2.put(m.path, utf8.encode(m.text));
+    if (m.local) await storage.write(m.path, m.text);
+  });
   if (direction === 'push') {
-    for (const p of plan.upload) {
+    await pool(plan.upload, PARALLEL, async (p) => {
       const data = await storage.read(p);
       if (data) await r2.put(p, data);
-    }
-    return plan.upload.length;
+    });
+    return plan.upload.length + writes.length;
   }
-  for (const p of plan.download) {
+  await pool(plan.download, PARALLEL, async (p) => {
     const data = await r2.get(p);
     if (data) await storage.write(p, data);
-  }
-  return plan.download.length;
+  });
+  return plan.download.length + writes.length;
 }
 
 export async function pushToR2(cfg: R2Config, storage: Storage): Promise<{ uploaded: number }> {
