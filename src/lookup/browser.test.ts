@@ -12,12 +12,17 @@ const LIVE = !!env.LIVE;
 const REAL_EPUB = env.REAL_EPUB;
 const node = (name: string): Promise<any> => import(/* @vite-ignore */ `node:${name}`);
 
-/** Playwright is not a repo dependency: PLAYWRIGHT_DIR, else the copy in the npx cache the Playwright MCP uses. */
+/** The installed playwright devDependency, else PLAYWRIGHT_DIR, else the copy in the npx cache the Playwright MCP uses. */
 async function findPlaywright(): Promise<any> {
   const { existsSync, readdirSync } = await node('fs');
   const { homedir } = await node('os');
   const { join } = await node('path');
   const { pathToFileURL } = await node('url');
+  try {
+    return await import('playwright'); // the installed devDependency
+  } catch {
+    /* fall back to PLAYWRIGHT_DIR / the npx cache */
+  }
   const dirs: string[] = [];
   if (env.PLAYWRIGHT_DIR) dirs.push(env.PLAYWRIGHT_DIR);
   const npx = join(homedir(), 'AppData/Local/npm-cache/_npx');

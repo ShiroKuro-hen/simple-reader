@@ -1,7 +1,6 @@
 // Real-browser tests: the Storage contract on OPFS, the library on OPFS, and openBook with real EPUB/PDF files.
 //   node src/reader/e2e/run.mjs
-// Needs Playwright (not a repo dependency). Point PLAYWRIGHT_DIR at an install of the `playwright` package;
-// it falls back to the copy in the npx cache that the Playwright MCP server uses.
+// Needs the `playwright` devDependency (PLAYWRIGHT_DIR or the npx cache are fallbacks).
 import assert from 'node:assert/strict';
 import { readdirSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -18,7 +17,8 @@ function findPlaywright() {
   throw new Error('Playwright not found: set PLAYWRIGHT_DIR');
 }
 
-const { chromium } = await import(pathToFileURL(join(findPlaywright(), 'index.mjs')).href);
+// The installed devDependency first; the npx-cache / PLAYWRIGHT_DIR copy only as a fallback.
+const { chromium } = await import('playwright').catch(() => import(pathToFileURL(join(findPlaywright(), 'index.mjs')).href));
 const { createServer } = await import(pathToFileURL(join(repo, 'node_modules/vite/dist/node/index.js')).href);
 
 const server = await createServer({ root: repo, logLevel: 'error', optimizeDeps: { include: ['pdfjs-dist'] } });

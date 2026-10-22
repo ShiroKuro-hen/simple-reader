@@ -140,13 +140,16 @@ describe.skipIf(!pw)('installable offline app in a real browser', { timeout: 120
     expect(installabilityErrors).toEqual([]);
   });
 
-  it('shows "Install app" when Chromium itself reports the app installable, hides it once installed, and prompts only once', async () => {
+  // Headless Chromium on Linux (GitHub runners) never raises beforeinstallprompt; desktop Chromium does.
+  it.skipIf(!!(globalThis as any).process.env.CI)('shows "Install app" when Chromium itself reports the app installable, and hides it once installed', async () => {
     // A real profile (not incognito) on a page with this manifest and worker: Chromium fires the real beforeinstallprompt.
     await expect.poll(installVisible, { timeout: 20_000 }).toBe(true);
     await page.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
     await expect.poll(installVisible).toBe(false);
+  });
 
-    // The browser's own event again (dispatched by hand, since a real prompt would open a native window).
+  it('shows "Install app" on a beforeinstallprompt event, suppresses the browser infobar, and prompts only once', async () => {
+    // The browser's own event (dispatched by hand, since a real prompt would open a native window).
     const prevented = await page.evaluate(() => {
       const e = new Event('beforeinstallprompt', { cancelable: true }) as any;
       (window as any).prompted = 0;
