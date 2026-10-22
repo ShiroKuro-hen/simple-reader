@@ -25,7 +25,7 @@ Most readers either do a lot and get in the way, or do little and send your libr
 ## Features
 
 - **EPUB and PDF** in one reader (EPUB rendered with foliate-js, PDF with PDF.js).
-- **Clean paginated reading** with light, dark and sepia themes and adjustable font size.
+- **Clean paginated reading** with light, dark and sepia themes, adjustable font size, and a choice of one page or two pages side by side on wide windows.
 - **Select any word to look it up:** definition and Spanish translation in a popup.
 - **Japanese support:** hiragana reading and romaji on select, plus a furigana-over-kanji mode.
 - **Local-first:** books are files on your device (browser OPFS). No account, no database.
@@ -51,7 +51,7 @@ Run the tests with `npm test`.
 
 ## Usage
 
-Open an EPUB or PDF from the library screen (file picker or drag and drop). Select a word or phrase to open the lookup popup. Theme, font size and furigana mode live in the settings panel. Your last position in each book is remembered.
+Open an EPUB or PDF from the library screen (file picker or drag and drop). Select a word or phrase to open the lookup popup. Theme, font size, page layout and furigana mode live in the settings panel. Your last position in each book is remembered.
 
 | Action | Keys |
 |---|---|

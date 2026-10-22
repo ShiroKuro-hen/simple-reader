@@ -1,4 +1,4 @@
-import type { FuriganaMode, R2Config, ReaderSettings, Theme } from '../types';
+import type { FuriganaMode, PageLayout, R2Config, ReaderSettings, Theme } from '../types';
 import { storage } from '../storage/index';
 import { h, iconButton, icon, sheet, toast } from './dom';
 import { MAX_FONT, MIN_FONT, stepFontSize } from './reading';
@@ -30,6 +30,7 @@ function saveR2(c: R2Config) {
 }
 
 const THEMES: [Theme, string][] = [['light', 'Light'], ['dark', 'Dark'], ['sepia', 'Sepia']];
+const LAYOUTS: [PageLayout, string][] = [['auto', 'Auto'], ['single', 'One page']];
 const MODES: [FuriganaMode, string][] = [['off', 'Off'], ['furigana', 'Furigana'], ['romaji', 'Romaji']];
 
 export function createSettings(app: App, opts: { onRestored?: () => void } = {}) {
@@ -46,6 +47,9 @@ export function createSettings(app: App, opts: { onRestored?: () => void } = {})
   const smaller = h('button', { class: 'btn', type: 'button', 'aria-label': 'Smaller text', onclick: step(-1) }, h('span', { class: 'a-sm' }, 'A'));
   const larger = h('button', { class: 'btn', type: 'button', 'aria-label': 'Larger text', onclick: step(1) }, h('span', { class: 'a-lg' }, 'A'));
 
+  const layoutBtns = LAYOUTS.map(([l, name]) =>
+    h('button', { type: 'button', onclick: () => app.update({ layout: l }) }, name),
+  );
   const modeBtns = MODES.map(([m, name]) =>
     h('button', { type: 'button', onclick: () => app.update({ furigana: m }) }, name),
   );
@@ -104,6 +108,8 @@ export function createSettings(app: App, opts: { onRestored?: () => void } = {})
       h('div', { class: 'set-head' }, h('h2', {}, 'Settings'), iconButton('close', 'Close settings', () => dlg.close())),
       h('section', {}, h('h3', {}, 'Theme'), h('div', { class: 'swatches' }, ...themeBtns)),
       h('section', {}, h('h3', {}, 'Text size'), h('div', { class: 'size-row' }, smaller, sizeLabel, larger)),
+      h('section', {}, h('h3', {}, 'Page layout'), h('div', { class: 'seg', role: 'group', 'aria-label': 'Page layout' }, ...layoutBtns),
+        h('p', { class: 'note' }, 'Auto shows two pages side by side on a wide window. PDFs always show one page.')),
       h('section', {}, h('h3', {}, 'Japanese reading'), h('div', { class: 'seg', role: 'group', 'aria-label': 'Japanese reading' }, ...modeBtns)),
       h('section', {},
         h('h3', {}, 'Backup (Cloudflare R2)'),
@@ -118,6 +124,7 @@ export function createSettings(app: App, opts: { onRestored?: () => void } = {})
 
   function sync(s: ReaderSettings) {
     THEMES.forEach(([t], i) => themeBtns[i]!.setAttribute('aria-pressed', String(s.theme === t)));
+    LAYOUTS.forEach(([l], i) => layoutBtns[i]!.setAttribute('aria-pressed', String(s.layout === l)));
     MODES.forEach(([m], i) => modeBtns[i]!.setAttribute('aria-pressed', String(s.furigana === m)));
     sizeLabel.textContent = `${s.fontSize}%`;
     smaller.disabled = s.fontSize <= MIN_FONT;

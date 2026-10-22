@@ -98,7 +98,7 @@ async function selectWord(word) {
   await ev(() => sr.waitFor(() => session.selects.length > 0, 'a TextSelection'));
   return { sel: await ev(() => session.selects.at(-1)), click: { x: r.x + r.width / 2, y: r.y + r.height / 2 } };
 }
-const THEME = (theme, fontSize = 100) => ({ theme, fontSize, furigana: 'off' });
+const THEME = (theme, fontSize = 100, layout = 'auto') => ({ theme, fontSize, furigana: 'off', layout });
 
 // ---- Storage contract on the real OPFS ----------------------------------------------------------------------
 const contractNames = await (async () => {
@@ -273,6 +273,21 @@ await test('epub: font size changes pagination (bigger text means more pages)', 
   await ev(() => session.handle.goToFraction(0));
   const after = (await nav('next')).fraction;
   assert.ok(after < before, `one page covers less of the book at 200% (${after} vs ${before})`);
+});
+
+await test('epub: single-page layout shows one page where auto shows two side by side', async () => {
+  // the default 800px host is too narrow for a spread: foliate needs ~2x720px of text width
+  await ev(() => { document.getElementById('host').style.width = '1500px'; });
+  await open('book-en.epub');
+  const twoUp = (await nav('next')).fraction;
+  await ev((s) => session.handle.setSettings(s), THEME('light', 100, 'single'));
+  await ev(() => session.handle.goToFraction(0));
+  const one = (await nav('next')).fraction;
+  assert.ok(one < twoUp, `a single page covers less of the book than a spread (${one} vs ${twoUp})`);
+  await ev((s) => session.handle.setSettings(s), THEME('light', 100, 'auto'));
+  await ev(() => session.handle.goToFraction(0));
+  assert.ok(Math.abs((await nav('next')).fraction - twoUp) < 1e-6, 'back to auto restores the spread');
+  await ev(() => { document.getElementById('host').style.width = '800px'; });
 });
 
 await test('epub: opening with the dark setting is dark from the first page', async () => {

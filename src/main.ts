@@ -33,6 +33,7 @@ async function createApp(): Promise<App> {
       theme: resolveTheme(storedTheme(), dark.matches),
       fontSize: saved.fontSize ?? 100,
       furigana: saved.furigana ?? 'off',
+      layout: saved.layout ?? 'auto',
     },
     update(patch, remember = true) {
       app.settings = { ...app.settings, ...patch };

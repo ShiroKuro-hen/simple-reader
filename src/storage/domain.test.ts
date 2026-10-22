@@ -39,13 +39,16 @@ describe('newestFirst', () => {
 
 describe('mergeSettings', () => {
   it('fills the defaults when nothing was saved', () => {
-    expect(mergeSettings(null)).toEqual({ theme: 'light', fontSize: 100, furigana: 'off' });
+    expect(mergeSettings(null)).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto' });
   });
   it('keeps valid saved values and fills the missing ones', () => {
-    expect(mergeSettings({ theme: 'dark', fontSize: 140 })).toEqual({ theme: 'dark', fontSize: 140, furigana: 'off' });
+    expect(mergeSettings({ theme: 'dark', fontSize: 140 })).toEqual({ theme: 'dark', fontSize: 140, furigana: 'off', layout: 'auto' });
+  });
+  it('remembers the one-page layout', () => {
+    expect(mergeSettings({ layout: 'single' }).layout).toBe('single');
   });
   it('replaces garbage from a hand-edited or corrupt file', () => {
-    expect(mergeSettings({ theme: 'neon', fontSize: 'big', furigana: 7 })).toEqual({ theme: 'light', fontSize: 100, furigana: 'off' });
+    expect(mergeSettings({ theme: 'neon', fontSize: 'big', furigana: 7, layout: 'triple' })).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto' });
   });
   it('clamps absurd font sizes', () => {
     expect(mergeSettings({ fontSize: 5 }).fontSize).toBe(50);

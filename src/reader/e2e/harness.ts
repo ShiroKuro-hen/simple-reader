@@ -5,7 +5,7 @@ import { createLibrary } from '../../storage/library';
 import { opfsStorage } from '../../storage/opfs';
 import type { BookFormat, ReaderHandle, ReaderSettings, TextSelection } from '../../types';
 
-const LIGHT: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off' };
+const LIGHT: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto' };
 
 export interface Session {
   handle: ReaderHandle;

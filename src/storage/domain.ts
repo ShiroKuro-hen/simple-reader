@@ -1,7 +1,7 @@
 // Pure rules of the library: no OPFS, no DOM. Everything here is testable with plain values.
-import type { BookFormat, BookMeta, FuriganaMode, ReaderSettings, Theme } from '../types';
+import type { BookFormat, BookMeta, FuriganaMode, PageLayout, ReaderSettings, Theme } from '../types';
 
-export const DEFAULT_SETTINGS: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off' };
+export const DEFAULT_SETTINGS: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto' };
 
 /** A book's identity is the SHA-256 of its bytes, so the same file on two devices is one book. */
 export async function sha256Hex(data: ArrayBuffer | Uint8Array): Promise<string> {
@@ -20,6 +20,7 @@ export const newestFirst = (books: BookMeta[]) => [...books].sort((a, b) => b.ad
 
 const THEMES: Theme[] = ['light', 'dark', 'sepia'];
 const FURIGANA: FuriganaMode[] = ['off', 'furigana', 'romaji'];
+const LAYOUTS: PageLayout[] = ['auto', 'single'];
 
 /** Settings come from a file the user may have edited: keep what is valid, default the rest. */
 export function mergeSettings(saved: unknown): ReaderSettings {
@@ -29,5 +30,6 @@ export function mergeSettings(saved: unknown): ReaderSettings {
     theme: THEMES.includes(s.theme as Theme) ? (s.theme as Theme) : DEFAULT_SETTINGS.theme,
     fontSize: Math.min(300, Math.max(50, size)),
     furigana: FURIGANA.includes(s.furigana as FuriganaMode) ? (s.furigana as FuriganaMode) : DEFAULT_SETTINGS.furigana,
+    layout: LAYOUTS.includes(s.layout as PageLayout) ? (s.layout as PageLayout) : DEFAULT_SETTINGS.layout,
   };
 }

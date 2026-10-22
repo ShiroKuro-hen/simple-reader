@@ -115,14 +115,14 @@ describe('progress', () => {
 });
 
 describe('settings', () => {
-  it('defaults to a light theme at 100% with furigana off', async () => {
-    expect(await setup().lib.getSettings()).toEqual({ theme: 'light', fontSize: 100, furigana: 'off' });
+  it('defaults to a light theme at 100% with furigana off and the automatic page layout', async () => {
+    expect(await setup().lib.getSettings()).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto' });
   });
 
   it('round-trips what was saved', async () => {
     const { lib } = setup();
-    await lib.saveSettings({ theme: 'sepia', fontSize: 120, furigana: 'romaji' });
-    expect(await lib.getSettings()).toEqual({ theme: 'sepia', fontSize: 120, furigana: 'romaji' });
+    await lib.saveSettings({ theme: 'sepia', fontSize: 120, furigana: 'romaji', layout: 'single' });
+    expect(await lib.getSettings()).toEqual({ theme: 'sepia', fontSize: 120, furigana: 'romaji', layout: 'single' });
   });
 
   it('survives a corrupt settings file', async () => {

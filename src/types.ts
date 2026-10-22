@@ -35,12 +35,15 @@ export interface Storage {
 
 export type Theme = 'light' | 'dark' | 'sepia';
 export type FuriganaMode = 'off' | 'furigana' | 'romaji';
+/** 'auto': two pages side by side when the window is wide enough; 'single': always one. */
+export type PageLayout = 'auto' | 'single';
 
 export interface ReaderSettings {
   theme: Theme;
   /** Percent, 100 = the book's own size. */
   fontSize: number;
   furigana: FuriganaMode;
+  layout: PageLayout;
 }
 
 export interface TocItem {

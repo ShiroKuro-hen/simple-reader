@@ -1,11 +1,16 @@
 import '../vendor/foliate-js/view.js';
-import type { OpenBookOptions, ReaderHandle, TextSelection, TocItem } from '../types';
+import type { OpenBookOptions, ReaderHandle, ReaderSettings, TextSelection, TocItem } from '../types';
 import { loadEpub } from './epub-book';
 import { readSelection, replayable } from './selection';
 import { epubCss } from './theme';
 
 const toToc = (items: any[] = []): TocItem[] =>
   items.map((i) => ({ label: i.label, href: i.href, ...(i.subitems?.length ? { children: toToc(i.subitems) } : {}) }));
+
+/** foliate shows up to 2 columns on a wide window; 'single' caps it at one page. */
+function setLayout(renderer: HTMLElement, s: ReaderSettings) {
+  renderer.setAttribute('max-column-count', s.layout === 'single' ? '1' : '2');
+}
 
 export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBookOptions): Promise<ReaderHandle> {
   const book = await loadEpub(blob);
@@ -19,6 +24,7 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
 
   await view.open(book);
   view.renderer.setStyles(epubCss(opts.settings));
+  setLayout(view.renderer, opts.settings);
 
   view.addEventListener('load', ({ detail: { doc } }: CustomEvent<{ doc: Document }>) => {
     opts.onDocLoad?.(doc);
@@ -46,6 +52,7 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
     toc: toToc(book.toc),
     setSettings(s) {
       view.renderer.setStyles(epubCss(s));
+      setLayout(view.renderer, s);
     },
     onSelect: selects.on,
     onRelocate: relocates.on,
