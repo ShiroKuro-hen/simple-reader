@@ -31,7 +31,7 @@ function japaneseAt(doc: Document, x: number, y: number): { node: Text; index: n
 
   // The caret sits between two characters, and at a text node's edge one of them is in the neighbouring node (a kanji
   // inside <ruby> next to the 。 after it): the browser then reports the NEXT node, so look at both sides. Of the two,
-  // only a Japanese character can be a word, and it counts when the point is on it or within a couple of pixels.
+  // only a Japanese character can be a word, and it counts only when the point is on its box (a tap beside it is a tap on the page).
   let best: { node: Text; index: number } | null = null;
   let bestDistance = Infinity;
   for (const c of charsAround(text, caret.offset)) {
@@ -43,7 +43,7 @@ function japaneseAt(doc: Document, x: number, y: number): { node: Text; index: n
     const d = Math.hypot(Math.max(q.left - x, 0, x - q.right), Math.max(q.top - y, 0, y - q.bottom));
     if (d < bestDistance) [best, bestDistance] = [c, d];
   }
-  return bestDistance <= 2 ? best : null;
+  return bestDistance === 0 ? best : null;
 }
 
 /** The characters on each side of a caret, crossing into the neighbouring base-text node at a node's edge. */
