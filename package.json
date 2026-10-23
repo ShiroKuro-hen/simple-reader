@@ -1,6 +1,6 @@
 {
   "name": "simple-reader",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "A clean, local-first EPUB and PDF reader with instant word lookup, Spanish translation and Japanese furigana.",
