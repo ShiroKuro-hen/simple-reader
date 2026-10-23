@@ -13,7 +13,7 @@ const HIDE_AFTER_MS = 3500;
 export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack: () => void): () => void {
   const ac = new AbortController();
   const docs = new Set<Document>(); // rendered EPUB documents, kept so furigana can be re-applied
-  const settings = createSettings(app);
+  const settings = createSettings(app, { comic: book.format === 'cbz' });
   let handle: ReaderHandle | null = null;
   let items: Annotation[] = []; // every highlight, note and bookmark of this book, tombstones included
   let where = { location: '', label: '' }; // the last reported position
@@ -88,12 +88,21 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
     iconButton('settings', 'Reading settings', settings.open));
   const bottom = h('footer', { class: 'bar bar-bottom' }, h('div', { class: 'bar-meta' }, chapter, pct), slider);
 
-  const edge = (dir: -1 | 1) =>
-    h('div', { class: `edge edge-${dir < 0 ? 'l' : 'r'}`, 'data-turn': dir < 0 ? 'prev' : 'next', 'aria-hidden': 'true', onclick: () => turn(dir) },
-      dir < 0 ? icon('back') : icon('next'));
+  // A right-to-left comic reads the other way, so its left edge goes forward. Read at each use: the setting can change while reading.
+  const flipped = () => book.format === 'cbz' && app.settings.rtl;
+  const edgeL = h('div', { class: 'edge edge-l', 'aria-hidden': 'true', onclick: () => turn(flipped() ? 1 : -1) });
+  const edgeR = h('div', { class: 'edge edge-r', 'aria-hidden': 'true', onclick: () => turn(flipped() ? -1 : 1) });
+  function drawEdges() {
+    const f = flipped();
+    edgeL.dataset.turn = f ? 'next' : 'prev';
+    edgeR.dataset.turn = f ? 'prev' : 'next';
+    edgeL.replaceChildren(icon(f ? 'next' : 'back'));
+    edgeR.replaceChildren(icon(f ? 'back' : 'next'));
+  }
+  drawEdges();
   const hot = (cls: string) => h('div', { class: `hot ${cls}`, 'aria-hidden': 'true', onpointerdown: showChrome, onpointermove: showChrome });
 
-  const view = h('div', { class: 'reader' }, stage, loading, edge(-1), edge(1), hot('hot-top'), hot('hot-bottom'), top, bottom);
+  const view = h('div', { class: 'reader' }, stage, loading, edgeL, edgeR, hot('hot-top'), hot('hot-bottom'), top, bottom);
   root.replaceChildren(view, settings.el, toc, panel.el);
 
   // --- auto-hiding chrome ---
@@ -125,6 +134,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
     const action = keyAction({
       key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey,
       targetTag: (e.target as Element | null)?.tagName, dialogOpen: dialogOpen(), popupOpen: popup.open,
+      rtl: flipped(),
     });
     if (!action) return;
     if (action === 'show-chrome') return showChrome(); // never swallow Tab
@@ -174,6 +184,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
     }
   }
   async function preloadJapanese() {
+    if (book.format === 'cbz') return; // comics have no text to read furigana on
     try {
       await (await import('../lookup/index')).preloadJapanese();
     } catch {
@@ -184,6 +195,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
   let mode = app.settings.furigana;
   const unsub = app.subscribe((s) => {
     handle?.setSettings(s);
+    drawEdges();
     if (s.furigana === mode) return;
     mode = s.furigana;
     if (mode !== 'off') void preloadJapanese();

@@ -9,3 +9,13 @@ export function showUpdateToast(apply: () => void): void {
     h('button', { class: 'btn', type: 'button', onclick: () => toast.remove() }, 'Later'));
   document.body.append(toast);
 }
+
+/** A toast for a newer release of the native app: the user downloads it themselves, nothing is installed in place. */
+export function showReleaseToast(version: string, url: string): void {
+  if (document.querySelector('.release-toast')) return;
+  const toast = h('div', { class: 'release-toast', role: 'status' },
+    h('span', {}, `Version ${version} is available`),
+    h('a', { class: 'btn primary', href: url, target: '_blank', rel: 'noopener noreferrer' }, 'Download'),
+    h('button', { class: 'btn', type: 'button', onclick: () => toast.remove() }, 'Later'));
+  document.body.append(toast);
+}

@@ -41,7 +41,7 @@ export function listenForIncoming(showLibrary: () => void): void {
     if (!items.length) return;
     const plan = planIncoming(items);
     plan.skipped.forEach((id) => bridge!.close(id));
-    if (plan.skipped.length) toast('Only EPUB and PDF files are supported.', 'error');
+    if (plan.skipped.length) toast('Only EPUB, PDF and CBZ files are supported.', 'error');
     const names = new Map(items.map((i) => [i.id, i.name]));
     let added = 0;
     for (const t of plan.take) {

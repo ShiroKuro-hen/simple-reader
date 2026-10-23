@@ -1,7 +1,7 @@
 // Pure rules of the library: no OPFS, no DOM. Everything here is testable with plain values.
 import type { BookFormat, BookMeta, FuriganaMode, PageLayout, ReaderSettings, Theme } from '../types';
 
-export const DEFAULT_SETTINGS: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto' };
+export const DEFAULT_SETTINGS: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true };
 
 /** A book's identity is the SHA-256 of its bytes, so the same file on two devices is one book. */
 export async function sha256Hex(data: ArrayBuffer | Uint8Array): Promise<string> {
@@ -11,7 +11,7 @@ export async function sha256Hex(data: ArrayBuffer | Uint8Array): Promise<string>
 
 export function formatOf(filename: string): BookFormat | null {
   const ext = filename.includes('.') ? filename.split('.').pop()!.toLowerCase() : '';
-  return ext === 'epub' || ext === 'pdf' ? ext : null;
+  return ext === 'epub' || ext === 'pdf' || ext === 'cbz' ? ext : null;
 }
 
 export const titleFromFilename = (filename: string) => filename.replace(/\.[^.]+$/, '').replace(/_+/g, ' ').trim();
@@ -31,5 +31,6 @@ export function mergeSettings(saved: unknown): ReaderSettings {
     fontSize: Math.min(300, Math.max(50, size)),
     furigana: FURIGANA.includes(s.furigana as FuriganaMode) ? (s.furigana as FuriganaMode) : DEFAULT_SETTINGS.furigana,
     layout: LAYOUTS.includes(s.layout as PageLayout) ? (s.layout as PageLayout) : DEFAULT_SETTINGS.layout,
+    rtl: typeof s.rtl === 'boolean' ? s.rtl : DEFAULT_SETTINGS.rtl,
   };
 }

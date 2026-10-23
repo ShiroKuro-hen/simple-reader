@@ -234,4 +234,18 @@ const sample = pdf({
 });
 out('sample.pdf', sample);
 out('corrupt.pdf', sample.subarray(0, 120));
+// ---- CBZ -----------------------------------------------------------------
+// Flat-colour pages, stored out of order; the names test natural order (10 and 11 come after 4 in reading order).
+const comicPage = (rgb) => png(60, 90, rgb);
+const manga = zipFiles([
+  ['1.png', comicPage([220, 40, 40])],
+  ['2.png', comicPage([40, 180, 60])],
+  ['3.png', comicPage([40, 80, 220])],
+  ['10.png', comicPage([240, 220, 30])],
+  ['11.png', comicPage([200, 40, 200])],
+  ['4.png', comicPage([30, 200, 220])],
+]);
+out('manga.cbz', manga);
+out('corrupt.cbz', manga.slice(0, Math.floor(manga.length / 2)));
+out('no-pages.cbz', zipFiles([['ComicInfo.xml', '<ComicInfo/>'], ['readme.txt', 'no pictures in here']]));
 console.log('fixtures written to', here);

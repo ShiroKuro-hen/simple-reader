@@ -1,12 +1,13 @@
 // Page-side helpers for run.mjs. Exposes the real modules on window.sr; the assertions live in run.mjs.
 import * as annotations from '../../annotations/model';
 import { openBook } from '../index';
+import * as mangaNav from '../manga-nav';
 import { storageContract } from '../../storage/contract';
 import { createLibrary } from '../../storage/library';
 import { opfsStorage } from '../../storage/opfs';
 import type { BookFormat, ReaderHandle, ReaderSettings, TextSelection } from '../../types';
 
-const LIGHT: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto' };
+const LIGHT: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true };
 
 export interface Session {
   handle: ReaderHandle;
@@ -28,7 +29,8 @@ async function openFixture(name: string, o: { settings?: ReaderSettings; locatio
   const host = document.getElementById('host')!;
   const file = await fixture(name);
   const docs: Document[] = [];
-  const handle = await openBook(file, name.endsWith('.pdf') ? 'pdf' : ('epub' as BookFormat), host, {
+  const format: BookFormat = name.endsWith('.pdf') ? 'pdf' : name.endsWith('.cbz') ? 'cbz' : 'epub';
+  const handle = await openBook(file, format, host, {
     settings: o.settings ?? LIGHT,
     location: o.location,
     onDocLoad: (d) => docs.push(d),
@@ -68,6 +70,7 @@ function rectOf(s: Session, needle: string) {
 
 (window as any).sr = {
   annotations,
+  mangaNav,
   storageContract,
   opfsStorage,
   createLibrary,

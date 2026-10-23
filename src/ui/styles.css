@@ -671,7 +671,8 @@ dialog.tag-sheet { width: min(420px, calc(100vw - 32px)); max-height: 90dvh; bor
 }
 .tag-error { min-height: 1.4em; font-size: 13px; color: var(--danger); }
 .tag-actions { display: flex; justify-content: flex-end; }
-.update-toast {
+.update-toast,
+.release-toast {
   position: fixed;
   left: 50%;
   bottom: max(16px, env(safe-area-inset-bottom));
@@ -689,7 +690,8 @@ dialog.tag-sheet { width: min(420px, calc(100vw - 32px)); max-height: 90dvh; bor
   font-size: 14.5px;
   font-weight: 550;
 }
-.update-toast .btn { min-height: 40px; padding: 0 14px; }
+.update-toast .btn,
+.release-toast .btn { min-height: 40px; padding: 0 14px; }
 @media (max-width: 480px) {
   .install-btn { padding: 0 11px; }
   .install-btn .btn-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

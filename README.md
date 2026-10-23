@@ -24,7 +24,8 @@ Most readers either do a lot and get in the way, or do little and send your libr
 
 ## Features
 
-- **EPUB and PDF** in one reader (EPUB rendered with foliate-js, PDF with PDF.js).
+- **EPUB, PDF and CBZ comics** in one reader (EPUB rendered with foliate-js, PDF with PDF.js, CBZ as decoded page images). Comics read right to left by default, in one or two pages, with zoom.
+- **Update notice** in the Windows and Android apps when a newer release exists on GitHub (the web app updates itself).
 - **Clean paginated reading** with light, dark and sepia themes, adjustable font size, and a choice of one page or two pages side by side on wide windows.
 - **Select any word to look it up:** definition and Spanish translation in a popup.
 - **Japanese support:** hiragana reading and romaji on select, plus a furigana-over-kanji mode.
@@ -105,14 +106,16 @@ Taken from [PLAN.md](PLAN.md) (written in Spanish). Checked means it exists toda
 - [x] Word lookup with Spanish translation, Japanese reading, romaji and furigana
 - [x] Optional R2 backup and sync
 - [x] Library search, tags and sorting
-- [ ] Library: import whole folders, search inside the text of every book
+- [x] Manga (CBZ): right-to-left, double page, zoom, page preloading
+- [ ] Manga: image folders, vertical (webtoon) scroll
+- [ ] Right-to-left and vertical EPUB, in-book search
 - [x] Highlights, notes and bookmarks in EPUB (PDF: bookmarks only; PDF highlights pending)
-- [ ] Scriptable core: CLI, local API, export templates, rules
-- [ ] Deep customisation: custom CSS, reading profiles, remappable keys, user dictionaries
+- [ ] Library: import whole folders, series and volumes
 - [x] PWA with offline support
 - [ ] Desktop and Android: CI builds exist; test on real devices, sign releases, check lookups under the native origin
-- [ ] Other sync backends (WebDAV, shared folder) and OPDS
-- [ ] Extras: TTS, MOBI/FB2/CBZ, OCR
+- [ ] Optional: custom CSS and remappable keys, user dictionary
+
+Out of scope on purpose: local API, CLI, rules, plugins, TTS, OCR, OPDS, extra sync backends.
 
 ## Tech stack and credits
 

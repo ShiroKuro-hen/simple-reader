@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { fixtureBytes, fixtureFile } from '../reader/fixtures/load';
+import { storeZip } from '../reader/fixtures/store-zip';
 import { memoryStorage } from './opfs';
 import { createLibrary } from './library';
 
@@ -114,15 +115,54 @@ describe('progress', () => {
   });
 });
 
+describe('comics (cbz)', () => {
+  const bytes = (s: string) => new TextEncoder().encode(s);
+  const comic = () => storeZip({ '2.jpg': bytes('two'), '10.jpg': bytes('ten'), '__MACOSX/2.jpg': bytes('junk') });
+
+  it('adds a comic as format cbz under its file name, keeping the exact bytes', async () => {
+    const { fs, lib } = setup();
+    const data = comic();
+    const meta = await lib.addBook(new File([data], 'Vol_1.cbz'));
+    expect(meta).toMatchObject({ title: 'Vol 1', format: 'cbz', size: data.length });
+    expect(await fs.list('books/')).toEqual([`books/${meta.id}.cbz`]);
+    const blob = await lib.getBookBlob(meta.id);
+    expect(blob.type).toBe('application/vnd.comicbook+zip');
+    expect(Array.from(new Uint8Array(await blob.arrayBuffer()))).toEqual(Array.from(data));
+  });
+
+  it('adding the same comic under another name returns the same book', async () => {
+    const { fs, lib } = setup();
+    const first = await lib.addBook(new File([comic()], 'Vol_1.cbz'));
+    const again = await lib.addBook(new File([comic()], 'Vol_1 (copy).cbz'));
+    expect(again).toEqual(first);
+    expect(await fs.list('books/')).toEqual([`books/${first.id}.cbz`]);
+  });
+
+  it('refuses a zip without pages and a file that is not a zip, storing nothing', async () => {
+    const { fs, lib } = setup();
+    await expect(lib.addBook(new File([storeZip({ 'readme.txt': bytes('x') })], 'empty.cbz'))).rejects.toThrow(/Not a valid CBZ/);
+    await expect(lib.addBook(new File([bytes('plain text')], 'fake.cbz'))).rejects.toThrow(/Not a valid CBZ/);
+    expect(await fs.list('')).toEqual([]);
+  });
+
+  it('removing a comic deletes its file and metadata', async () => {
+    const { fs, lib } = setup();
+    const meta = await lib.addBook(new File([comic()], 'Vol_1.cbz'));
+    await lib.removeBook(meta.id);
+    expect(await fs.list('')).toEqual([]);
+    await expect(lib.getBookBlob(meta.id)).rejects.toThrow();
+  });
+});
+
 describe('settings', () => {
   it('defaults to a light theme at 100% with furigana off and the automatic page layout', async () => {
-    expect(await setup().lib.getSettings()).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto' });
+    expect(await setup().lib.getSettings()).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true });
   });
 
   it('round-trips what was saved', async () => {
     const { lib } = setup();
-    await lib.saveSettings({ theme: 'sepia', fontSize: 120, furigana: 'romaji', layout: 'single' });
-    expect(await lib.getSettings()).toEqual({ theme: 'sepia', fontSize: 120, furigana: 'romaji', layout: 'single' });
+    await lib.saveSettings({ theme: 'sepia', fontSize: 120, furigana: 'romaji', layout: 'single', rtl: false });
+    expect(await lib.getSettings()).toEqual({ theme: 'sepia', fontSize: 120, furigana: 'romaji', layout: 'single', rtl: false });
   });
 
   it('survives a corrupt settings file', async () => {

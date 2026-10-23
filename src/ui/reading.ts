@@ -40,6 +40,8 @@ export interface KeyInfo {
   targetTag?: string;
   dialogOpen?: boolean;
   popupOpen?: boolean;
+  /** Right-to-left book: the arrows swap, so ArrowLeft turns forward. */
+  rtl?: boolean;
 }
 
 export function keyAction(e: KeyInfo): KeyAction | null {
@@ -48,9 +50,11 @@ export function keyAction(e: KeyInfo): KeyAction | null {
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return null;
   switch (e.key) {
     case 'ArrowLeft':
+      return e.rtl ? 'next' : 'prev';
+    case 'ArrowRight':
+      return e.rtl ? 'prev' : 'next';
     case 'PageUp':
       return 'prev';
-    case 'ArrowRight':
     case 'PageDown':
       return 'next';
     case ' ':

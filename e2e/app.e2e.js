@@ -149,7 +149,7 @@ async (page, ctx = {}) => {
 
   await step('unsupported file type -> friendly toast', async () => {
     await page.setInputFiles('input[type=file]', [{ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') }]);
-    await until(async () => /Only EPUB and PDF/.test(await toastText()), 'unsupported toast');
+    await until(async () => /Only EPUB, PDF and CBZ/.test(await toastText()), 'unsupported toast');
   });
 
   await step('add by drag & drop (and the overlay appears while dragging)', async () => {

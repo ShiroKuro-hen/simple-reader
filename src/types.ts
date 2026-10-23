@@ -1,7 +1,7 @@
 // Shared contracts. Every module imports types from here and nowhere else,
 // so the storage, reader, lookup, sync and ui pieces can be built in parallel.
 
-export type BookFormat = 'epub' | 'pdf';
+export type BookFormat = 'epub' | 'pdf' | 'cbz';
 
 export interface BookMeta {
   /** SHA-256 hex of the file content: the same book on two devices shares one id. */
@@ -77,6 +77,8 @@ export interface ReaderSettings {
   fontSize: number;
   furigana: FuriganaMode;
   layout: PageLayout;
+  /** Comics (cbz) read right to left; ignored by EPUB and PDF. */
+  rtl: boolean;
 }
 
 export interface TocItem {
