@@ -58,11 +58,36 @@ async (page, env = {}) => {
   const selected = async () =>
     (await Promise.all(frames().map((f) => f.evaluate(() => document.getSelection()?.toString() ?? '').catch(() => '')))).join('');
   /** Like `until` for a selection, but a timeout reports what was selected instead (CI diagnosis). */
-  async function untilSelected(expected, what, ms = 8000) {
+  async function untilSelected(expected, what, ms = 8000, at = null) {
     try {
       await until(async () => (await selected()) === expected, what, ms);
     } catch (e) {
-      throw new Error(`${e.message} (selected: ${JSON.stringify(await selected())})`);
+      let extra = '';
+      if (at)
+        extra = ' | ' + JSON.stringify(await Promise.all(frames().map(async (f) => {
+          const box = await (await f.frameElement().catch(() => null))?.boundingBox().catch(() => null);
+          if (!box) return null;
+          return f.evaluate(({ x, y }) => {
+            const c = document.caretPositionFromPoint?.(x, y);
+            const n = c?.offsetNode;
+            const el = document.elementFromPoint(x, y);
+            const rect = [];
+            if (n && n.nodeType === 3)
+              for (const i of [c.offset - 1, c.offset]) {
+                if (i < 0 || i >= n.length) continue;
+                const r = document.createRange();
+                r.setStart(n, i);
+                r.setEnd(n, i + 1);
+                const q = r.getBoundingClientRect();
+                rect.push({ i, ch: n.data[i], l: Math.round(q.left), r: Math.round(q.right), t: Math.round(q.top), b: Math.round(q.bottom) });
+              }
+            return {
+              wm: getComputedStyle(document.body).writingMode, pt: [Math.round(x), Math.round(y)], el: el ? el.tagName : null,
+              caret: c ? { type: n.nodeType, parent: n.parentElement?.tagName, off: c.offset, txt: (n.data || '').slice(0, 10) } : null, rect,
+            };
+          }, { x: at.x - box.x, y: at.y - box.y }).catch((err) => String(err));
+        })));
+      throw new Error(`${e.message} (selected: ${JSON.stringify(await selected())})${extra}`);
     }
   }
   const popupWord = async () => (await page.locator('.popup:not([hidden]) .pop-word').textContent({ timeout: 8000 })).trim();
@@ -230,7 +255,7 @@ async (page, env = {}) => {
     await openFromLibrary('縦書きの本');
     const p = await charAt('景色', { index: 1 });
     await page.mouse.click(p.x, p.y);
-    await untilSelected('景色', 'the word 景色', 40000);
+    await untilSelected('景色', 'the word 景色', 40000, p);
     await reset();
     const r = await charAt('けしき', { index: 1, reading: true });
     await page.mouse.click(r.x, r.y);
@@ -249,7 +274,7 @@ async (page, env = {}) => {
     const before = await chromeHidden();
     const p = await charAt('景色', { index: 1 });
     await page.touchscreen.tap(p.x, p.y);
-    await untilSelected('景色', 'tap selects 景色', 40000);
+    await untilSelected('景色', 'tap selects 景色', 40000, p);
     eq(await chromeHidden(), before, 'toolbars after a tap on a word');
     await reset();
     const spot = await until(async () => {
