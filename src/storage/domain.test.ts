@@ -11,10 +11,12 @@ describe('sha256Hex', () => {
 });
 
 describe('formatOf', () => {
-  it('reads the extension case-insensitively and knows epub, pdf and cbz', () => {
+  it('reads the extension case-insensitively and knows epub, pdf, cbz and cbr', () => {
     expect(formatOf('Book.EPUB')).toBe('epub');
     expect(formatOf('a.b.pdf')).toBe('pdf');
     expect(formatOf('Vol 1.CBZ')).toBe('cbz');
+    expect(formatOf('Vol 1.cbr')).toBe('cbz'); // a RAR comic is still one cbz book
+    expect(formatOf('Vol 2.CBR')).toBe('cbz');
     expect(formatOf('archive.zip')).toBeNull();
     expect(formatOf('notes.txt')).toBeNull();
     expect(formatOf('epub')).toBeNull();

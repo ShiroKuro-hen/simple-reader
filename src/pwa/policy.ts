@@ -7,8 +7,8 @@ export interface BuiltFile {
   digest: string;
 }
 
-/** Big files fetched on first use and then kept (cache-first): the Japanese dictionaries and PDF character maps. */
-const LAZY = /^(dict\/|pdfjs\/cmaps\/)/;
+/** Big files fetched on first use and then kept (cache-first): the Japanese dictionaries, PDF character maps and the RAR decoder (.cbr only). */
+const LAZY = /^(dict\/|pdfjs\/cmaps\/|assets\/unrar-[^/]+\.wasm$)/;
 const NOT_SHELL = /(^sw\.js$|\.map$)/;
 
 function fnv1a(s: string): string {

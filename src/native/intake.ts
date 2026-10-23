@@ -8,10 +8,12 @@ export type Plan = { take: { id: number; fileName: string; type: string }[]; ski
 
 const TYPE: Record<BookFormat, string> = { epub: 'application/epub+zip', pdf: 'application/pdf', cbz: 'application/vnd.comicbook+zip' };
 
+// Other senders name the same comic archives differently (older x-cbz, RAR comics); they all come in as cbz.
+const CBZ_MIMES = [TYPE.cbz, 'application/x-cbz', 'application/vnd.comicbook-rar', 'application/x-cbr'];
+
 const formatOfMime = (mime: string | null): BookFormat | null => {
   const m = (mime ?? '').split(';')[0]!.trim().toLowerCase();
-  // application/x-cbz is the older name some senders still use for the same comic archive.
-  return m === TYPE.epub ? 'epub' : m === TYPE.pdf ? 'pdf' : m === TYPE.cbz || m === 'application/x-cbz' ? 'cbz' : null;
+  return m === TYPE.epub ? 'epub' : m === TYPE.pdf ? 'pdf' : CBZ_MIMES.includes(m) ? 'cbz' : null;
 };
 
 /**

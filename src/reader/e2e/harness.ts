@@ -6,6 +6,8 @@ import { storageContract } from '../../storage/contract';
 import { createLibrary } from '../../storage/library';
 import { opfsStorage } from '../../storage/opfs';
 import type { BookFormat, ReaderHandle, ReaderSettings, TextSelection } from '../../types';
+import { openComicArchive } from '../comic-archive';
+import { storeRar5 } from '../fixtures/store-rar';
 
 const LIGHT: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true };
 
@@ -25,11 +27,14 @@ const waitFor = async (cond: () => boolean, what: string, ms = 8000) => {
   }
 };
 
-async function openFixture(name: string, o: { settings?: ReaderSettings; location?: string } = {}): Promise<Session> {
+type Opts = { settings?: ReaderSettings; location?: string };
+
+/** As the library does: the name picks the format, and .cbr is a comic whatever its container (zip or rar). */
+const formatFor = (name: string): BookFormat => (name.endsWith('.pdf') ? 'pdf' : /\.cb[zr]$/.test(name) ? 'cbz' : 'epub');
+
+async function openFile(file: File, format: BookFormat, o: Opts): Promise<Session> {
   const host = document.getElementById('host')!;
-  const file = await fixture(name);
   const docs: Document[] = [];
-  const format: BookFormat = name.endsWith('.pdf') ? 'pdf' : name.endsWith('.cbz') ? 'cbz' : 'epub';
   const handle = await openBook(file, format, host, {
     settings: o.settings ?? LIGHT,
     location: o.location,
@@ -42,6 +47,47 @@ async function openFixture(name: string, o: { settings?: ReaderSettings; locatio
   await waitFor(() => s.relocs.length > 0, 'first relocate');
   (window as any).session = s;
   return s;
+}
+
+async function openFixture(name: string, o: Opts = {}): Promise<Session> {
+  return openFile(await fixture(name), formatFor(name), o);
+}
+
+/** A fixture's bytes under another file name, to check that the bytes (not the name) decide the container. */
+async function openFixtureAs(name: string, asName: string, o: Opts = {}): Promise<Session> {
+  return openFile(new File([await fixture(name)], asName), formatFor(asName), o);
+}
+
+/** The six manga pages, read out of manga.cbz, as a name -> bytes map in archive order. */
+async function mangaPages(): Promise<Record<string, Uint8Array>> {
+  const archive = await openComicArchive(await fixture('manga.cbz'));
+  try {
+    const files: Record<string, Uint8Array> = {};
+    for (const n of archive.names) files[n] = new Uint8Array(await (await archive.read(n)).arrayBuffer());
+    return files;
+  } finally {
+    await archive.close();
+  }
+}
+
+/** Archives built in the page, so no RAR binary is committed for the tests. */
+const RECIPES: Record<string, () => Promise<Uint8Array<ArrayBuffer>>> = {
+  'manga-rar': async () => storeRar5(await mangaPages()),
+  'rar-no-images': async () => storeRar5({ 'notes.txt': new TextEncoder().encode('no pages here') }),
+  'rar-damaged': async () => {
+    const bytes = storeRar5({ '1.png': new TextEncoder().encode('one') });
+    bytes[13] = bytes[13]! ^ 0xff; // the main header's type byte: its CRC no longer matches
+    return bytes;
+  },
+};
+
+async function openBuilt(recipe: string, asName: string, o: Opts = {}): Promise<Session> {
+  return openFile(new File([await RECIPES[recipe]!()], asName), formatFor(asName), o);
+}
+
+/** The file the runner put into #pick (Playwright setInputFiles), opened as a comic. */
+async function openPicked(o: Opts = {}): Promise<Session> {
+  return openFile((document.getElementById('pick') as HTMLInputElement).files![0]!, 'cbz', o);
 }
 
 /** Host-viewport rectangle of the first occurrence of `needle` in the visible EPUB section or PDF text layer. */
@@ -75,6 +121,9 @@ function rectOf(s: Session, needle: string) {
   opfsStorage,
   createLibrary,
   openFixture,
+  openFixtureAs,
+  openBuilt,
+  openPicked,
   rectOf,
   waitFor,
   fixture,

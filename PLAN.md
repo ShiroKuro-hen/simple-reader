@@ -54,7 +54,7 @@ Hecho: CBZ (derecha a izquierda, doble página, zoom, precarga), aviso de versi�
 
 ## 5. Riesgos
 - **Memoria en manga:** tomos de cientos de imágenes; decodificar bajo demanda, no cargar el zip entero.
-- **CBR/RAR y 7z:** formatos cerrados o pesados; **solo CBZ** al inicio. Convertir CBR a CBZ queda fuera.
+- **CBR (RAR):** se lee con `node-unrar-js` (MIT), cargado solo al abrir un RAR (unos 14 KB de JS y 86 KB de wasm comprimidos). Queda sin cubrir: RAR con contraseña y 7z. El presupuesto total de JS quedó con solo ~4 KB de margen.
 - **PDF en foliate-js es experimental:** se mantiene PDF.js directo.
 - **Anclaje de anotaciones** si el EPUB cambia: guardar también el texto citado.
 - **Android:** probar siempre en teléfono real; acceso a archivos por selector, no por rutas.

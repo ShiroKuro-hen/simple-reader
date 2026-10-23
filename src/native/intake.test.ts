@@ -24,6 +24,9 @@ describe('bookFileName', () => {
     ['issue', CBZ, 'issue.cbz'],
     ['issue', 'application/x-cbz', 'issue.cbz'], // the older MIME name maps to cbz too
     ['issue (2)', OCTET, null], // octet-stream without the extension is not claimed
+    ['Vol 3.cbr', OCTET, 'Vol 3.cbr'], // cbr extension is a comic too
+    ['issue', 'application/vnd.comicbook-rar', 'issue.cbz'],
+    ['issue', 'application/x-cbr', 'issue.cbz'],
   ])('%j + %j -> %j', (name, mime, expected) => {
     expect(bookFileName(name, mime)).toBe(expected);
   });
@@ -48,6 +51,12 @@ describe('planIncoming', () => {
   it('plans a comic sent as the older cbz MIME type with the canonical type back', () => {
     expect(planIncoming([{ id: 7, name: 'Vol 2', mime: 'application/x-cbz' }]).take).toEqual([
       { id: 7, fileName: 'Vol 2.cbz', type: CBZ },
+    ]);
+  });
+
+  it('plans a RAR comic under its own name, with the canonical cbz type', () => {
+    expect(planIncoming([{ id: 9, name: 'Vol 3.cbr', mime: OCTET }]).take).toEqual([
+      { id: 9, fileName: 'Vol 3.cbr', type: CBZ },
     ]);
   });
 
