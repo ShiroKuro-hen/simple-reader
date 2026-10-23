@@ -337,6 +337,12 @@ async (page, env = {}) => {
     eq(await selected(), '', 'selection before the blank tap (anything here comes from earlier, not from the tap)');
     const spot = await until(async () => {
       const vp = page.viewportSize();
+      // Between the toolbars, not a fixed inset: the page margins above and below the text are blank too, and
+      // a page that fills the window (vertical text now clears the bars) has no blank spot in its middle.
+      const topBar = await page.locator('.bar-top').boundingBox();
+      const bottomBar = await page.locator('.bar-bottom').boundingBox();
+      const y0 = topBar.y + topBar.height + 6;
+      const y1 = bottomBar.y - 6;
       for (const f of frames()) {
         const box = await (await f.frameElement().catch(() => null))?.boundingBox().catch(() => null);
         if (!box) continue;
@@ -353,13 +359,13 @@ async (page, env = {}) => {
               for (const q of r.getClientRects()) boxes.push(q);
             }
           const onText = (px, py) => boxes.some((q) => px >= q.left - 2 && px <= q.right + 2 && py >= q.top - 2 && py <= q.bottom + 2);
-          for (let y = 120; y < o.vh - 120; y += 15)
+          for (let y = o.y0; y < o.y1; y += 15)
             for (let x = 180; x < o.vw - 180; x += 15) {
               const el = document.elementFromPoint(x - o.ox, y - o.oy);
               if ((el === document.documentElement || el === document.body) && !onText(x - o.ox, y - o.oy)) return { x, y };
             }
           return null;
-        }, { ox: box.x, oy: box.y, vw: vp.width, vh: vp.height }).catch(() => null);
+        }, { ox: box.x, oy: box.y, vw: vp.width, vh: vp.height, y0, y1 }).catch(() => null);
         if (hit) return hit;
       }
       return null;

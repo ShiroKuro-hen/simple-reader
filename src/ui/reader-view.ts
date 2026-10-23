@@ -265,6 +265,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
         settings: app.settings,
         location: saved?.location,
         onDocLoad,
+        getBars: () => ({ top: top.offsetHeight, bottom: bottom.offsetHeight }),
       });
       if (disposed) return opened.destroy();
       handle = opened;

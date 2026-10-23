@@ -4,16 +4,33 @@ import type { Annotation, OpenBookOptions, ReaderHandle, ReaderSettings, TextSel
 import { collapse } from '../vendor/foliate-js/epubcfi.js';
 import { Overlayer } from '../vendor/foliate-js/overlayer.js';
 import { loadEpub } from './epub-book';
+import { pageLayout } from './page-layout';
 import { readSelection, replayable } from './selection';
 import { installWordSelect } from './word-select';
+import { unhangIndents } from './unhang';
 import { epubCss } from './theme';
 
 const toToc = (items: any[] = []): TocItem[] =>
   items.map((i) => ({ label: i.label, href: i.href, ...(i.subitems?.length ? { children: toToc(i.subitems) } : {}) }));
 
-/** foliate shows up to 2 columns on a wide window; 'single' caps it at one page. */
-function setLayout(renderer: HTMLElement, s: ReaderSettings) {
-  renderer.setAttribute('max-column-count', s.layout === 'single' ? '1' : '2');
+/**
+ * Sizes foliate's page for the window: the text fills it and keeps clear of the toolbars (see page-layout.ts).
+ * Margin and block size go first: setting max-inline-size re-renders the page.
+ */
+const appliedLayout = new WeakMap<HTMLElement, string>();
+
+function setLayout(renderer: HTMLElement, s: ReaderSettings, stage: HTMLElement, bars: () => { top: number; bottom: number }) {
+  const { top, bottom } = bars();
+  const g = pageLayout({ width: stage.clientWidth, height: stage.clientHeight, layout: s.layout, topBar: top, bottomBar: bottom });
+  // Setting an attribute re-renders the page even when the value is the same: do it only on a real change, or a theme
+  // switch (or any settings change) would re-render in the middle of a section re-load and could leave it stuck.
+  const key = JSON.stringify(g);
+  if (appliedLayout.get(renderer) === key) return;
+  appliedLayout.set(renderer, key);
+  renderer.setAttribute('max-column-count', String(g.maxColumns));
+  renderer.setAttribute('margin', `${g.margin}px`);
+  renderer.setAttribute('max-block-size', `${g.maxBlock}px`);
+  renderer.setAttribute('max-inline-size', `${g.maxInline}px`);
 }
 
 /** foliate's overlay reads these two custom properties when it paints a highlight. */
@@ -45,9 +62,20 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
     return run;
   };
 
+  const bars = opts.getBars ?? (() => ({ top: 0, bottom: 0 }));
+  let settings = opts.settings;
+  const relayout = () => setLayout(view.renderer, settings, container, bars);
+  // Window resizes change the column count and the margins: re-lay out once the drag settles.
+  let resizeTimer: ReturnType<typeof setTimeout> | undefined;
+  const resizes = new ResizeObserver(() => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(relayout, 120);
+  });
+
   await view.open(book);
   view.renderer.setStyles(epubCss(opts.settings));
-  setLayout(view.renderer, opts.settings);
+  relayout();
+  resizes.observe(container);
   setHighlightStyle(view, opts.settings);
 
   const paint = (a: Annotation) => view.addAnnotation({ ...a, value: a.location }).catch(() => {}); // a CFI that no longer resolves is skipped
@@ -72,6 +100,8 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
   });
 
   view.addEventListener('load', ({ detail: { doc, index } }: CustomEvent<{ doc: Document; index: number }>) => {
+    // Before anyone sees the document: forced horizontal, a book's hanging (negative) indents would be cut off.
+    if (writing === 'horizontal') unhangIndents(doc);
     opts.onDocLoad?.(doc);
     installWordSelect(doc, (e) => !!view.renderer.getContents().find((c: any) => c.doc === doc)?.overlayer?.hitTest(e)[0]);
     // Debounced so the popup waits for the drag/handles to settle instead of firing per character.
@@ -120,7 +150,8 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
     toc: toToc(book.toc),
     setSettings(s) {
       view.renderer.setStyles(epubCss(s));
-      setLayout(view.renderer, s);
+      settings = s;
+      relayout();
       setHighlightStyle(view, s);
       if (s.writing !== writing) {
         writing = s.writing;
@@ -151,6 +182,8 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
     rtl: () => writing === 'book' && (view.renderer.direction.writingMode === 'vertical-rl' || view.renderer.direction.rtl),
     destroy() {
       clearTimeout(timer);
+      clearTimeout(resizeTimer);
+      resizes.disconnect();
       selects.clear();
       relocates.clear();
       view.close(); // closes the paginator, which revokes section URLs

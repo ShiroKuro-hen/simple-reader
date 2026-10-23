@@ -132,6 +132,8 @@ export interface OpenBookOptions {
   location?: string;
   /** Called with every freshly rendered EPUB document, so lookup can add <ruby>. */
   onDocLoad?: (doc: Document) => void;
+  /** Heights in px of the toolbars drawn over the reader: EPUB keeps its text clear of them. */
+  getBars?: () => { top: number; bottom: number };
 }
 
 export interface LookupResult {
