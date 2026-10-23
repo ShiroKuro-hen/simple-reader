@@ -279,6 +279,53 @@ async (page, env = {}) => {
     await reset();
   });
 
+  await step('vertical text: a tap on empty page beside a furigana selects nothing', async () => {
+    // The caret is the nearest text to a point, so empty page next to a reading reports a caret inside the <rt>.
+    const spot = await until(async () => {
+      for (const f of frames()) {
+        const box = await (await f.frameElement().catch(() => null))?.boundingBox().catch(() => null);
+        if (!box) continue;
+        const vp = page.viewportSize();
+        const hit = await f.evaluate((o) => {
+          const boxes = [];
+          const readings = [];
+          const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          for (let n = w.nextNode(); n; n = w.nextNode())
+            for (let i = 0; i < n.length; i++) {
+              const r = document.createRange();
+              r.setStart(n, i);
+              r.setEnd(n, i + 1);
+              for (const q of r.getClientRects()) (n.parentElement.closest('rt, rp') ? readings : boxes).push(q), n.parentElement.closest('rt, rp') && boxes.push(q);
+            }
+          const onText = (px, py) => boxes.some((q) => px >= q.left - 1 && px <= q.right + 1 && py >= q.top - 1 && py <= q.bottom + 1);
+          for (const q of readings)
+            for (const d of [10, 16, 24, 34])
+              for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+                const x = (q.left + q.right) / 2 + dx * (q.width / 2 + d);
+                const y = (q.top + q.bottom) / 2 + dy * (q.height / 2 + d);
+                const hx = x + o.ox;
+                const hy = y + o.oy;
+                if (hx < 190 || hx > o.vw - 190 || hy < 120 || hy > o.vh - 120) continue;
+                const el = document.elementFromPoint(x, y);
+                if (el !== document.documentElement && el !== document.body) continue;
+                if (onText(x, y)) continue;
+                const c = document.caretPositionFromPoint?.(x, y);
+                if (c && c.offsetNode.nodeType === 3 && c.offsetNode.parentElement.closest('rt, rp')) return { x: hx, y: hy };
+              }
+          return null;
+        }, { ox: box.x, oy: box.y, vw: vp.width, vh: vp.height }).catch(() => null);
+        if (hit) return hit;
+      }
+      return null;
+    }, 'an empty spot whose nearest text is a furigana', 4000).catch(() => null);
+    // Only some browser/font combinations (Linux CI) report a caret inside the reading for empty page; elsewhere there is nothing to test.
+    if (!spot) return console.log('      (not exercised here: no empty spot has a furigana as its nearest text in this browser)');
+    await page.mouse.click(spot.x, spot.y);
+    await page.waitForTimeout(1500); // the word lookup is async: give a wrong selection time to appear
+    eq(await selected(), '', 'selection after a click on empty page next to a furigana');
+    await reset();
+  });
+
   await step('touch: a tap on a word selects it and leaves the toolbars alone; a tap on blank page toggles them', async () => {
     const before = await chromeHidden();
     const p = await charAt('景色', { index: 1 });

@@ -23,6 +23,17 @@ function japaneseAt(doc: Document, x: number, y: number): { node: Text; index: n
 
   const reading = text.parentElement?.closest('rt, rp');
   if (reading) {
+    // The caret is the nearest text to the point, so a tap on empty page next to a furigana lands here too: it only
+    // counts when the point is on the reading's own box.
+    const onReading = [caret.offset - 1, caret.offset].some((i) => {
+      if (i < 0 || i >= text.length) return false;
+      const r = doc.createRange();
+      r.setStart(text, i);
+      r.setEnd(text, i + 1);
+      const q = r.getBoundingClientRect();
+      return x >= q.left && x <= q.right && y >= q.top && y <= q.bottom;
+    });
+    if (!onReading) return null;
     // A reading stands for its base: the first character of the <ruby>'s base text.
     const ruby = reading.closest('ruby');
     const first = ruby ? (baseTextWalker(ruby).nextNode() as Text | null) : null;
