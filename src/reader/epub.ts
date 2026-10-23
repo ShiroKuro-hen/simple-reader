@@ -34,6 +34,15 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
   let wanted = new Map<string, Annotation>(); // what should be painted, by id
   let current: { cfi: string; range?: Range; label?: string } | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let writing = opts.settings.writing;
+  // Page turns, jumps and the re-load after a writing change run one after another: foliate loses its place
+  // when a turn starts while a section is still loading.
+  let queue: Promise<unknown> = Promise.resolve();
+  const serial = <T>(fn: () => Promise<T>): Promise<T> => {
+    const run = queue.then(fn);
+    queue = run.catch(() => {});
+    return run;
+  };
 
   await view.open(book);
   view.renderer.setStyles(epubCss(opts.settings));
@@ -82,6 +91,18 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
       return undefined;
     }
   }
+  /** foliate reads the writing direction when a section loads, so a change re-loads the section where the reader is. */
+  function reloadAtPosition(): Promise<void> {
+    return serial(() => {
+      if (!current) return Promise.resolve();
+      // The first word on screen, as a point: a range CFI would scroll to its far edge and land on another page.
+      const start = current.range?.cloneRange();
+      start?.collapse(true);
+      const { index } = view.resolveNavigation(current.cfi);
+      const target = view.resolveNavigation(start ? view.getCFI(index, start) : current.cfi);
+      return view.renderer.goTo({ ...target, reload: true });
+    }).then(() => undefined, () => undefined);
+  }
   view.addEventListener('relocate', ({ detail: d }: CustomEvent) => {
     current = { cfi: d.cfi, range: d.range, label: d.tocItem?.label };
     relocates.emit({ location: d.cfi, fraction: d.fraction, label: d.tocItem?.label });
@@ -90,15 +111,19 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
   await view.init({ lastLocation: opts.location, showTextStart: false });
 
   return {
-    next: () => view.next(),
-    prev: () => view.prev(),
-    goTo: (target) => view.goTo(target),
-    goToFraction: (f) => view.goToFraction(f),
+    next: () => serial(() => view.next()),
+    prev: () => serial(() => view.prev()),
+    goTo: (target) => serial(() => view.goTo(target)),
+    goToFraction: (f) => serial(() => view.goToFraction(f)),
     toc: toToc(book.toc),
     setSettings(s) {
       view.renderer.setStyles(epubCss(s));
       setLayout(view.renderer, s);
       setHighlightStyle(view, s);
+      if (s.writing !== writing) {
+        writing = s.writing;
+        return reloadAtPosition(); // resolves once the section is shown again, when its direction is known
+      }
     },
     setAnnotations(items) {
       const next = new Map(items.filter((a) => a.kind !== 'bookmark' && !a.deleted).map((a) => [a.id, a]));
@@ -120,6 +145,8 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
     },
     onSelect: selects.on,
     onRelocate: relocates.on,
+    // Read now, not cached: foliate's direction is for the section on screen, which changes with every load.
+    rtl: () => writing === 'book' && (view.renderer.direction.writingMode === 'vertical-rl' || view.renderer.direction.rtl),
     destroy() {
       clearTimeout(timer);
       selects.clear();

@@ -102,7 +102,7 @@ async function selectWord(word) {
   await ev(() => sr.waitFor(() => session.selects.length > 0, 'a TextSelection'));
   return { sel: await ev(() => session.selects.at(-1)), click: { x: r.x + r.width / 2, y: r.y + r.height / 2 } };
 }
-const THEME = (theme, fontSize = 100, layout = 'auto') => ({ theme, fontSize, furigana: 'off', layout, rtl: true });
+const THEME = (theme, fontSize = 100, layout = 'auto') => ({ theme, fontSize, furigana: 'off', layout, rtl: true, writing: 'book' });
 
 // ---- Storage contract on the real OPFS ----------------------------------------------------------------------
 const contractNames = await (async () => {
@@ -586,7 +586,7 @@ const COLOUR = {
   '1.png': [220, 40, 40], '2.png': [40, 180, 60], '3.png': [40, 80, 220],
   '4.png': [30, 200, 220], '10.png': [240, 220, 30], '11.png': [200, 40, 200],
 };
-const MANGA = (layout = 'auto', rtl = true, fontSize = 100, theme = 'light') => ({ theme, fontSize, furigana: 'off', layout, rtl });
+const MANGA = (layout = 'auto', rtl = true, fontSize = 100, theme = 'light') => ({ theme, fontSize, furigana: 'off', layout, rtl, writing: 'book' });
 const isColour = (rgb, file, what) =>
   assert.ok(COLOUR[file].every((v, i) => Math.abs(v - rgb[i]) <= 8), `${what}: got rgb(${rgb}), want ${file} ${COLOUR[file]}`);
 /** The page images on screen, left to right: page number, x position, and the colour at the centre of the image. */
@@ -849,6 +849,124 @@ await test('wasm: opening a RAR downloads the unrar wasm exactly once, and turni
   await nav('next');
   await nav('next');
   assert.equal(wasmSeen.length, 1, 'one request per page load');
+});
+
+// ---- Text direction: a vertical Japanese EPUB, the 'writing' setting and rtl() ------------------------------------
+const WRITING = (writing, theme = 'light') => ({ theme, fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, writing });
+const writingModeOfSection = () => ev(() => getComputedStyle(session.docs.at(-1).body).writingMode);
+const rtlNow = () => ev(() => session.handle.rtl());
+/** Changes the setting and waits until the section is re-loaded in that direction (the reload is asynchronous). */
+const setWriting = (writing) =>
+  ev((s) => {
+    const want = s.writing === 'book' ? 'vertical-rl' : 'horizontal-tb';
+    const old = session.docs.at(-1); // the new CSS reaches the old document at once, so wait for a newly loaded one
+    session.handle.setSettings(s);
+    return sr.waitFor(() => {
+      const d = session.docs.at(-1);
+      return d !== old && !!d.defaultView && getComputedStyle(d.body).writingMode === want && session.handle.rtl() === (want === 'vertical-rl');
+    }, `the section re-loaded as ${want}`);
+  }, WRITING(writing));
+const visibleWordRect = (word) => ev((w) => sr.rectOf(session, w), word);
+const VIEWPORT_W = 1000;
+
+await test('vertical epub: in book mode the section keeps vertical-rl and rtl() is true', async () => {
+  await open('book-ja-vertical.epub', { settings: WRITING('book') });
+  assert.equal(await writingModeOfSection(), 'vertical-rl');
+  assert.equal(await rtlNow(), true);
+});
+
+await test('vertical epub: in horizontal mode the section is horizontal-tb and rtl() is false', async () => {
+  await open('book-ja-vertical.epub', { settings: WRITING('horizontal') });
+  assert.equal(await writingModeOfSection(), 'horizontal-tb');
+  assert.equal(await rtlNow(), false);
+});
+
+for (const at of [0.2, 0.5, 0.8]) await test(`vertical epub: switching book -> horizontal -> book at ${at} keeps the same text on screen and does not throw`, async () => {
+  await open('book-ja-vertical.epub', { settings: WRITING('book') });
+  // Mid-book, so that a switch which lost the place would show different text (the first page would hide that).
+  await nav('goToFraction', at);
+  // A number-led phrase in plain text ("11つ目の"): ruby readings would split a phrase over several text nodes.
+  const first = await ev(() => {
+    const d = session.docs.at(-1);
+    const f = d.defaultView?.frameElement?.getBoundingClientRect();
+    const walker = d.createTreeWalker(d.body, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const m = /\d+つ目の/.exec(n.data);
+      if (!m || n.parentElement.closest('rt, rp')) continue;
+      const r = d.createRange();
+      r.setStart(n, m.index);
+      r.setEnd(n, m.index + m[0].length);
+      const b = r.getBoundingClientRect();
+      const x = b.x + (f?.left ?? 0), y = b.y + (f?.top ?? 0);
+      if (x >= 0 && x + b.width <= innerWidth && y >= 0 && y + b.height <= innerHeight) return m[0];
+    }
+    return null;
+  });
+  assert.ok(first, 'a phrase is on screen');
+  const onScreen = (rect) => rect && rect.x >= 0 && rect.x + rect.width <= VIEWPORT_W && rect.y >= 0;
+  assert.ok(onScreen(await visibleWordRect(first)), `"${first}" is on screen before the switch`);
+
+  await setWriting('horizontal');
+  assert.equal(await writingModeOfSection(), 'horizontal-tb');
+  assert.equal(await rtlNow(), false);
+  assert.ok(onScreen(await visibleWordRect(first)), `"${first}" is still on screen after the switch to horizontal`);
+
+  await setWriting('book');
+  assert.equal(await writingModeOfSection(), 'vertical-rl');
+  assert.equal(await rtlNow(), true);
+  assert.ok(onScreen(await visibleWordRect(first)), `"${first}" is on screen again in vertical mode`);
+});
+
+await test('vertical epub: a page turn right after a switch moves one page on, not back or to the end', async () => {
+  await open('book-ja-vertical.epub', { settings: WRITING('book') });
+  await nav('goToFraction', 0.2);
+  const before = (await last()).fraction;
+  const n = await ev(() => session.relocs.length);
+  await ev((s) => {
+    session.handle.setSettings(s); // no waiting: the key comes straight after the setting
+    return session.handle.next();
+  }, WRITING('horizontal'));
+  await page.waitForTimeout(1200);
+  // Foliate re-scrolls after a re-load, so the relocations in between are noisy: the end is what matters.
+  const seq = await ev((n) => session.relocs.slice(n).map((r) => r.fraction), n);
+  const end = seq.at(-1);
+  assert.ok(end > before - 0.05 && end < 0.5, `after the switch and a turn: ${before} -> ${seq.join(' -> ')}`);
+});
+
+for (const writing of ['book', 'horizontal']) {
+  await test(`vertical epub, ${writing}: next advances and prev returns, with the fraction moving the same way`, async () => {
+    await open('book-ja-vertical.epub', { settings: WRITING(writing) });
+    const start = await last();
+    const a = await nav('next');
+    assert.ok(a.fraction > start.fraction, `next: ${start.fraction} -> ${a.fraction}`);
+    const b = await nav('next');
+    assert.ok(b.fraction > a.fraction, `next again: ${a.fraction} -> ${b.fraction}`);
+    const back = await nav('prev');
+    assert.ok(back.fraction < b.fraction, `prev: ${b.fraction} -> ${back.fraction}`);
+    near((await nav('prev')).fraction, start.fraction, 0.01, 'prev returns to the start');
+  });
+}
+
+await test('plain horizontal epub: book and horizontal modes render the same text, writing mode and rtl() unchanged', async () => {
+  await open('book-en.epub', { settings: WRITING('book') });
+  assert.equal(await writingModeOfSection(), 'horizontal-tb');
+  assert.equal(await rtlNow(), false);
+  const bookText = await ev(() => session.handle.here().text);
+  await open('book-en.epub', { settings: WRITING('horizontal') });
+  assert.equal(await writingModeOfSection(), 'horizontal-tb');
+  assert.equal(await rtlNow(), false);
+  assert.equal(await ev(() => session.handle.here().text), bookText, 'the same first page in both modes');
+  const f0 = (await last()).fraction;
+  assert.ok((await nav('next')).fraction > f0, 'next still advances');
+});
+
+await test('pdf and cbz: rtl() is false for a pdf and follows the setting for a comic', async () => {
+  await open('sample.pdf');
+  assert.equal(await rtlNow(), false);
+  await open('manga.cbz', { settings: MANGA('single', true) });
+  assert.equal(await rtlNow(), true);
+  await open('manga.cbz', { settings: MANGA('single', false) });
+  assert.equal(await rtlNow(), false);
 });
 
 // Opt-in: COMIC_RAR=/path/to/real.cbr runs against a real comic (never committed). The file goes in through the page's file input.

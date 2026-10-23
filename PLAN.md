@@ -33,7 +33,7 @@ Hecho: CBZ (derecha a izquierda, doble página, zoom, precarga), aviso de versi�
 - Hecho cuando: un tomo de 200 páginas se lee en el teléfono sin lag, en RTL, y se reabre donde se dejó.
 
 ### B. Lectura de texto
-- **RTL y escritura vertical** en EPUB (hoy las teclas asumen izquierda a derecha).
+- **RTL y escritura vertical** en EPUB: hecho. Las teclas y los bordes siguen la dirección del libro, y Ajustes > Dirección del texto permite forzar horizontal.
 - **Resaltados en PDF** (hoy solo marcadores).
 - **Búsqueda dentro del libro.**
 

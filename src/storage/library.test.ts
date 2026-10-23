@@ -197,13 +197,13 @@ describe('comics (cbz)', () => {
 
 describe('settings', () => {
   it('defaults to a light theme at 100% with furigana off and the automatic page layout', async () => {
-    expect(await setup().lib.getSettings()).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true });
+    expect(await setup().lib.getSettings()).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, writing: 'book' });
   });
 
   it('round-trips what was saved', async () => {
     const { lib } = setup();
-    await lib.saveSettings({ theme: 'sepia', fontSize: 120, furigana: 'romaji', layout: 'single', rtl: false });
-    expect(await lib.getSettings()).toEqual({ theme: 'sepia', fontSize: 120, furigana: 'romaji', layout: 'single', rtl: false });
+    await lib.saveSettings({ theme: 'sepia', fontSize: 120, furigana: 'romaji', layout: 'single', rtl: false, writing: 'horizontal' });
+    expect(await lib.getSettings()).toEqual({ theme: 'sepia', fontSize: 120, furigana: 'romaji', layout: 'single', rtl: false, writing: 'horizontal' });
   });
 
   it('survives a corrupt settings file', async () => {

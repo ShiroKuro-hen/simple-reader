@@ -185,7 +185,7 @@ const getDirection = doc => {
     const rtl = doc.body.dir === 'rtl'
         || direction === 'rtl'
         || doc.documentElement.dir === 'rtl'
-    return { vertical, rtl }
+    return { vertical, rtl, writingMode }
 }
 
 const getBackground = doc => {
@@ -261,7 +261,7 @@ class View {
 
                 // it needs to be visible for Firefox to get computed style
                 this.#iframe.style.display = 'block'
-                const { vertical, rtl } = getDirection(doc)
+                const { vertical, rtl, writingMode } = getDirection(doc)
                 const background = getBackground(doc)
                 this.#iframe.style.display = 'none'
 
@@ -269,7 +269,7 @@ class View {
                 this.#rtl = rtl
 
                 this.#contentRange.selectNodeContents(doc.body)
-                const layout = beforeRender?.({ vertical, rtl, background })
+                const layout = beforeRender?.({ vertical, rtl, background, writingMode })
                 this.#iframe.style.display = 'block'
                 this.render(layout)
                 this.#observer.observe(doc.body)
@@ -438,6 +438,7 @@ export class Paginator extends HTMLElement {
     #view
     #vertical = false
     #rtl = false
+    #writingMode = 'horizontal-tb'
     #margin = 0
     #index = -1
     #anchor = 0 // anchor view to a fraction (0-1), Range, or Element
@@ -677,9 +678,10 @@ export class Paginator extends HTMLElement {
         this.#container.append(this.#view.element)
         return this.#view
     }
-    #beforeRender({ vertical, rtl, background }) {
+    #beforeRender({ vertical, rtl, background, writingMode }) {
         this.#vertical = vertical
         this.#rtl = rtl
+        this.#writingMode = writingMode ?? this.#writingMode
         this.#top.classList.toggle('vertical', vertical)
 
         // set background to `doc` background
@@ -758,8 +760,13 @@ export class Paginator extends HTMLElement {
         this.#view.render(this.#beforeRender({
             vertical: this.#vertical,
             rtl: this.#rtl,
+            writingMode: this.#writingMode,
         }))
         this.#scrollToAnchor(this.#anchor)
+    }
+    /** The direction detected for the section on screen: { vertical, rtl, writingMode }. */
+    get direction() {
+        return { vertical: this.#vertical, rtl: this.#rtl, writingMode: this.#writingMode }
     }
     get scrolled() {
         return this.getAttribute('flow') === 'scrolled'
@@ -1003,8 +1010,10 @@ export class Paginator extends HTMLElement {
     #canGoToIndex(index) {
         return index >= 0 && index <= this.sections.length - 1
     }
-    async #goTo({ index, anchor, select}) {
-        if (index === this.#index) await this.#display({ index, anchor, select })
+    // simple-reader patch: `reload` loads the section again even when it is already shown, because foliate reads the
+    // writing direction only when a section loads (a changed style sheet alone would leave the layout stale).
+    async #goTo({ index, anchor, select, reload }) {
+        if (index === this.#index && !reload) await this.#display({ index, anchor, select })
         else {
             const oldIndex = this.#index
             const onLoad = detail => {

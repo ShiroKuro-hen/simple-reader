@@ -77,7 +77,10 @@ function zipFiles(files) {
   return new Uint8Array(Buffer.concat([...parts, cd, end]));
 }
 
-async function epub({ id, title, author, lang, chapters, cover, css }) {
+// A paragraph is plain text, or { html } for markup the caller has already escaped (ruby in the Japanese book).
+const paraHtml = (p) => (typeof p === 'string' ? esc(p) : p.html);
+
+async function epub({ id, title, author, lang, chapters, cover, css, progression }) {
   const files = [];
   const add = async (name, data) => files.push([name, data]);
   await add('mimetype', 'application/epub+zip');
@@ -96,7 +99,7 @@ async function epub({ id, title, author, lang, chapters, cover, css }) {
 ${cover ? '<meta name="cover" content="cover-img"/>' : ''}
 </metadata>
 <manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>${css ? '<item id="css" href="style.css" media-type="text/css"/>' : ''}${cover ? '<item id="cover-img" href="cover.png" media-type="image/png" properties="cover-image"/>' : ''}${items}</manifest>
-<spine>${chapters.map((_, i) => `<itemref idref="c${i}"/>`).join('')}</spine>
+<spine${progression ? ` page-progression-direction="${progression}"` : ''}>${chapters.map((_, i) => `<itemref idref="c${i}"/>`).join('')}</spine>
 </package>`,
   );
   await add(
@@ -111,7 +114,7 @@ ${cover ? '<meta name="cover" content="cover-img"/>' : ''}
       `<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="${lang}"><head><title>${esc(c.title)}</title>${css ? '<link rel="stylesheet" type="text/css" href="style.css"/>' : ''}</head><body>
 <h1>${esc(c.title)}</h1>
-${c.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('\n')}
+${c.paragraphs.map((p) => `<p>${paraHtml(p)}</p>`).join('\n')}
 </body></html>`,
     );
   if (cover) await add('OEBPS/cover.png', cover);
@@ -248,4 +251,28 @@ const manga = zipFiles([
 out('manga.cbz', manga);
 out('corrupt.cbz', manga.slice(0, Math.floor(manga.length / 2)));
 out('no-pages.cbz', zipFiles([['ComicInfo.xml', '<ComicInfo/>'], ['readme.txt', 'no pictures in here']]));
+// ---- Japanese EPUB in vertical writing --------------------------------------
+// Like most Japanese novels: `writing-mode: vertical-rl` on html and body, and the spine reads right to left.
+const ruby = (base, reading) => `<ruby>${esc(base)}<rt>${esc(reading)}</rt></ruby>`;
+const jaVerticalChapter = (n) => [
+  `第${n}章　${['夜明け', '雨の町', '遠い汽笛'][n - 1]}`,
+  { html: `${ruby('汽車', 'きしゃ')}の音が遠くで響いていた。${ruby('町', 'まち')}は霧に包まれ、人々は静かに歩いていく。` },
+  ...Array.from({ length: 30 }, (_, i) => ({
+    html: `${i + 1}つ目の${ruby('景色', 'けしき')}。${ruby('窓', 'まど')}の外では${ruby('雨', 'あめ')}が${i % 2 ? 'やんだ' : '降り続いた'}が、誰も外へ出ようとはしなかった。`,
+  })),
+];
+out(
+  'book-ja-vertical.epub',
+  await epub({
+    id: 'urn:uuid:33333333-3333-3333-3333-333333333333',
+    title: '縦書きの本',
+    author: '山田花子',
+    lang: 'ja',
+    cover: null,
+    css: 'html, body { writing-mode: vertical-rl; }\np { margin: 0 0 0.6em; }',
+    progression: 'rtl',
+    chapters: [1, 2, 3].map((n) => ({ title: `第${n}章`, paragraphs: jaVerticalChapter(n) })),
+  }),
+);
+
 console.log('fixtures written to', here);

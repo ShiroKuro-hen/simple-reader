@@ -9,7 +9,7 @@ import type { BookFormat, ReaderHandle, ReaderSettings, TextSelection } from '..
 import { openComicArchive } from '../comic-archive';
 import { storeRar5 } from '../fixtures/store-rar';
 
-const LIGHT: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true };
+const LIGHT: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, writing: 'book' };
 
 export interface Session {
   handle: ReaderHandle;

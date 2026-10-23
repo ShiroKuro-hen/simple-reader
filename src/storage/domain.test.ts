@@ -43,16 +43,16 @@ describe('newestFirst', () => {
 
 describe('mergeSettings', () => {
   it('fills the defaults when nothing was saved', () => {
-    expect(mergeSettings(null)).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true });
+    expect(mergeSettings(null)).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, writing: 'book' });
   });
   it('keeps valid saved values and fills the missing ones', () => {
-    expect(mergeSettings({ theme: 'dark', fontSize: 140 })).toEqual({ theme: 'dark', fontSize: 140, furigana: 'off', layout: 'auto', rtl: true });
+    expect(mergeSettings({ theme: 'dark', fontSize: 140 })).toEqual({ theme: 'dark', fontSize: 140, furigana: 'off', layout: 'auto', rtl: true, writing: 'book' });
   });
   it('remembers the one-page layout', () => {
     expect(mergeSettings({ layout: 'single' }).layout).toBe('single');
   });
   it('replaces garbage from a hand-edited or corrupt file', () => {
-    expect(mergeSettings({ theme: 'neon', fontSize: 'big', furigana: 7, layout: 'triple' })).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true });
+    expect(mergeSettings({ theme: 'neon', fontSize: 'big', furigana: 7, layout: 'triple' })).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, writing: 'book' });
   });
   it('clamps absurd font sizes', () => {
     expect(mergeSettings({ fontSize: 5 }).fontSize).toBe(50);
@@ -78,6 +78,20 @@ describe('mergeSettings', () => {
       furigana: 'romaji',
       layout: 'single',
       rtl: true,
+      writing: 'book',
     });
+  });
+  it('defaults the text direction to the book own', () => {
+    expect(mergeSettings(null).writing).toBe('book');
+  });
+  it('keeps a saved text direction, book or horizontal', () => {
+    expect(mergeSettings({ writing: 'book' }).writing).toBe('book');
+    expect(mergeSettings({ writing: 'horizontal' }).writing).toBe('horizontal');
+  });
+  it('replaces an unknown or non-string text direction with the book own', () => {
+    expect(mergeSettings({ writing: 'vertical' }).writing).toBe('book');
+    expect(mergeSettings({ writing: 'horizontal-tb' }).writing).toBe('book');
+    expect(mergeSettings({ writing: true }).writing).toBe('book');
+    expect(mergeSettings({ writing: null }).writing).toBe('book');
   });
 });
