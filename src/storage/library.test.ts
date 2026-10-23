@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { fixtureBytes, fixtureFile } from '../reader/fixtures/load';
 import { storeZip } from '../reader/fixtures/store-zip';
 import { memoryStorage } from './opfs';
-import { createLibrary } from './library';
+import { createLibrary, setWriting } from './library';
 
 /** A library over a fresh in-memory store with a clock that ticks once per call. */
 function setup() {
@@ -197,13 +197,13 @@ describe('comics (cbz)', () => {
 
 describe('settings', () => {
   it('defaults to a light theme at 100% with furigana off and the automatic page layout', async () => {
-    expect(await setup().lib.getSettings()).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, writing: 'book' });
+    expect(await setup().lib.getSettings()).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true });
   });
 
   it('round-trips what was saved', async () => {
     const { lib } = setup();
-    await lib.saveSettings({ theme: 'sepia', fontSize: 120, furigana: 'romaji', layout: 'single', rtl: false, writing: 'horizontal' });
-    expect(await lib.getSettings()).toEqual({ theme: 'sepia', fontSize: 120, furigana: 'romaji', layout: 'single', rtl: false, writing: 'horizontal' });
+    await lib.saveSettings({ theme: 'sepia', fontSize: 120, furigana: 'romaji', layout: 'single', rtl: false });
+    expect(await lib.getSettings()).toEqual({ theme: 'sepia', fontSize: 120, furigana: 'romaji', layout: 'single', rtl: false });
   });
 
   it('survives a corrupt settings file', async () => {
@@ -247,5 +247,29 @@ describe('annotations', () => {
     await lib.saveAnnotations({ bookId: 'other', items: [note({ bookId: 'other' })] });
     await lib.removeBook(en.id);
     expect(await fs.list('annotations/')).toEqual(['annotations/other.json']);
+  });
+});
+
+describe('setWriting', () => {
+  it('stores a horizontal text direction and stamps updatedAt', async () => {
+    const { fs, lib } = setup();
+    const en = await lib.addBook(fixtureFile('book-en.epub'));
+    const out = await setWriting(en.id, 'horizontal', fs, () => 5000);
+    expect(out).toMatchObject({ writing: 'horizontal', updatedAt: 5000 });
+    expect((await lib.listBooks())[0]).toEqual(out);
+  });
+
+  it('book removes the key so the meta file stays minimal', async () => {
+    const { fs, lib } = setup();
+    const en = await lib.addBook(fixtureFile('book-en.epub'));
+    await setWriting(en.id, 'horizontal', fs, () => 2000);
+    const out = await setWriting(en.id, 'book', fs, () => 3000);
+    expect(out.updatedAt).toBe(3000);
+    expect(JSON.parse(new TextDecoder().decode((await fs.read(`meta/${en.id}.json`))!))).not.toHaveProperty('writing');
+  });
+
+  it('refuses a book that is not in the library', async () => {
+    const { fs } = setup();
+    await expect(setWriting('nope', 'horizontal', fs)).rejects.toThrow(/Unknown book/);
   });
 });

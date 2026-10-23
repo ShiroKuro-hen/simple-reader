@@ -65,7 +65,7 @@ Open an EPUB or PDF from the library screen (file picker or drag and drop). Sele
 | Close the popup / show or hide the toolbars | `Esc` |
 | Show the toolbars | `Tab` (on touch: tap the middle of the page) |
 
-Vertical EPUBs (such as Japanese novels) keep their direction by default: the page-turn keys and the edge clicks follow it, so the left edge goes forward. Settings > Text direction can force horizontal, left-to-right reading.
+Vertical EPUBs (such as Japanese novels) keep their direction by default: the page-turn keys and the edge clicks follow it, so the left edge goes forward. Settings > Text direction can force horizontal, left-to-right reading. The choice is per book and syncs with it.
 
 In Japanese text a click or tap selects the whole word, found with the tokenizer, and furigana readings are never part of a selection; dragging still selects any phrase.
 

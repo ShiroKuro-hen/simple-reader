@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { ReaderSettings, Theme } from '../types';
+import type { Theme, ViewSettings } from '../types';
 import { epubCss, THEMES } from './theme';
 
-const base: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, writing: 'book' };
-const with_ = (over: Partial<ReaderSettings>) => ({ ...base, ...over });
+const base: ViewSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, writing: 'book' };
+const with_ = (over: Partial<ViewSettings>) => ({ ...base, ...over });
 const THEME_NAMES = Object.keys(THEMES) as Theme[];
 // Readings (<rt>, <rp>) can never start, end or sit inside a selection, in any theme or writing mode.
 const READING_RULE = 'rt, rp { user-select: none !important; -webkit-user-select: none !important; }';
