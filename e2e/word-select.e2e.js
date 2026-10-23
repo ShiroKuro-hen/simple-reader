@@ -57,6 +57,39 @@ async (page, env = {}) => {
   /** Everything selected in the book frames, as one string. */
   const selected = async () =>
     (await Promise.all(frames().map((f) => f.evaluate(() => document.getSelection()?.toString() ?? '').catch(() => '')))).join('');
+  /** Like `until` for a selection, but a timeout reports what was selected instead (CI diagnosis). */
+  async function untilSelected(expected, what, ms = 8000, at = null) {
+    try {
+      await until(async () => (await selected()) === expected, what, ms);
+    } catch (e) {
+      let extra = '';
+      if (at)
+        extra = ' | ' + JSON.stringify(await Promise.all(frames().map(async (f) => {
+          const box = await (await f.frameElement().catch(() => null))?.boundingBox().catch(() => null);
+          if (!box) return null;
+          return f.evaluate(({ x, y }) => {
+            const c = document.caretPositionFromPoint?.(x, y);
+            const n = c?.offsetNode;
+            const el = document.elementFromPoint(x, y);
+            const rect = [];
+            if (n && n.nodeType === 3)
+              for (const i of [c.offset - 1, c.offset]) {
+                if (i < 0 || i >= n.length) continue;
+                const r = document.createRange();
+                r.setStart(n, i);
+                r.setEnd(n, i + 1);
+                const q = r.getBoundingClientRect();
+                rect.push({ i, ch: n.data[i], l: Math.round(q.left), r: Math.round(q.right), t: Math.round(q.top), b: Math.round(q.bottom) });
+              }
+            return {
+              wm: getComputedStyle(document.body).writingMode, pt: [Math.round(x), Math.round(y)], el: el ? el.tagName : null,
+              caret: c ? { type: n.nodeType, parent: n.parentElement?.tagName, off: c.offset, txt: (n.data || '').slice(0, 10) } : null, rect,
+            };
+          }, { x: at.x - box.x, y: at.y - box.y }).catch((err) => String(err));
+        })));
+      throw new Error(`${e.message} (selected: ${JSON.stringify(await selected())})${extra}`);
+    }
+  }
   const popupWord = async () => (await page.locator('.popup:not([hidden]) .pop-word').textContent({ timeout: 8000 })).trim();
 
   /**
@@ -130,7 +163,7 @@ async (page, env = {}) => {
     await turnFuriganaOn();
     const p = await charAt('名前', { index: 1 });
     await page.mouse.click(p.x, p.y);
-    await until(async () => (await selected()) === '名前', 'the word 名前 selected', 40000);
+    await untilSelected('名前', 'the word 名前 selected', 40000);
     eq(await popupWord(), '名前', 'lookup heading');
     await reset();
   });
@@ -138,14 +171,14 @@ async (page, env = {}) => {
   await step('clicking the furigana selects the same word as its base', async () => {
     const p = await charAt('なまえ', { index: 1, reading: true });
     await page.mouse.click(p.x, p.y);
-    await until(async () => (await selected()) === '名前', 'the base word selected', 8000);
+    await untilSelected('名前', 'the base word selected', 8000);
     await reset();
   });
 
   await step('a kana particle is selected when the tokenizer makes it a word; punctuation selects nothing', async () => {
     const particle = await charAt('はまだ', { index: 0 });
     await page.mouse.click(particle.x, particle.y);
-    await until(async () => (await selected()) === 'は', 'the particle selected', 8000);
+    await untilSelected('は', 'the particle selected', 8000);
     await reset();
     const stop = await charAt('。', { index: 0 });
     await page.mouse.click(stop.x, stop.y);
@@ -205,7 +238,7 @@ async (page, env = {}) => {
   await step('tapping an existing highlight still opens the colour menu and selects nothing', async () => {
     const p = await charAt('猫', { index: 0 });
     await page.mouse.click(p.x, p.y);
-    await until(async () => (await selected()) === '猫', 'word for the highlight', 8000);
+    await untilSelected('猫', 'word for the highlight', 8000);
     await page.locator('.popup').getByRole('button', { name: 'Highlight green' }).click();
     await until(async () => (await painted()).length > 0, 'the highlight painted', 8000);
     await reset();
@@ -222,18 +255,74 @@ async (page, env = {}) => {
     await openFromLibrary('縦書きの本');
     const p = await charAt('景色', { index: 1 });
     await page.mouse.click(p.x, p.y);
-    await until(async () => (await selected()) === '景色', 'the word 景色', 40000);
+    await untilSelected('景色', 'the word 景色', 40000, p);
     await reset();
     const r = await charAt('けしき', { index: 1, reading: true });
     await page.mouse.click(r.x, r.y);
-    await until(async () => (await selected()) === '景色', 'the base word from the reading', 8000);
+    await untilSelected('景色', 'the base word from the reading', 8000);
     await reset();
   });
 
   await step('vertical text: a click on a particle selects it', async () => {
     const p = await charAt('の', { index: 0 });
     await page.mouse.click(p.x, p.y);
-    await until(async () => (await selected()) === 'の', 'の selected', 8000);
+    await untilSelected('の', 'の selected', 8000);
+    await reset();
+  });
+
+  await step('vertical text: a click on the edge of a kanji, right next to the 。 that follows it, still selects the word', async () => {
+    // Where one text node ends and the next begins the browser reports the caret in the NEXT node; the kanji must still win.
+    const p = await charAt('景色', { index: 1 });
+    const edge = { x: p.x, y: p.y + p.h / 2 - 0.5 };
+    await page.mouse.click(edge.x, edge.y);
+    await untilSelected('景色', 'the word 景色 from its lower edge', 40000, edge);
+    await reset();
+  });
+
+  await step('vertical text: a tap on empty page beside a furigana selects nothing', async () => {
+    // The caret is the nearest text to a point, so empty page next to a reading reports a caret inside the <rt>.
+    const spot = await until(async () => {
+      for (const f of frames()) {
+        const box = await (await f.frameElement().catch(() => null))?.boundingBox().catch(() => null);
+        if (!box) continue;
+        const vp = page.viewportSize();
+        const hit = await f.evaluate((o) => {
+          const boxes = [];
+          const readings = [];
+          const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          for (let n = w.nextNode(); n; n = w.nextNode())
+            for (let i = 0; i < n.length; i++) {
+              const r = document.createRange();
+              r.setStart(n, i);
+              r.setEnd(n, i + 1);
+              for (const q of r.getClientRects()) (n.parentElement.closest('rt, rp') ? readings : boxes).push(q), n.parentElement.closest('rt, rp') && boxes.push(q);
+            }
+          const onText = (px, py) => boxes.some((q) => px >= q.left - 1 && px <= q.right + 1 && py >= q.top - 1 && py <= q.bottom + 1);
+          for (const q of readings)
+            for (const d of [10, 16, 24, 34])
+              for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+                const x = (q.left + q.right) / 2 + dx * (q.width / 2 + d);
+                const y = (q.top + q.bottom) / 2 + dy * (q.height / 2 + d);
+                const hx = x + o.ox;
+                const hy = y + o.oy;
+                if (hx < 190 || hx > o.vw - 190 || hy < 120 || hy > o.vh - 120) continue;
+                const el = document.elementFromPoint(x, y);
+                if (el !== document.documentElement && el !== document.body) continue;
+                if (onText(x, y)) continue;
+                const c = document.caretPositionFromPoint?.(x, y);
+                if (c && c.offsetNode.nodeType === 3 && c.offsetNode.parentElement.closest('rt, rp')) return { x: hx, y: hy };
+              }
+          return null;
+        }, { ox: box.x, oy: box.y, vw: vp.width, vh: vp.height }).catch(() => null);
+        if (hit) return hit;
+      }
+      return null;
+    }, 'an empty spot whose nearest text is a furigana', 4000).catch(() => null);
+    // Only some browser/font combinations (Linux CI) report a caret inside the reading for empty page; elsewhere there is nothing to test.
+    if (!spot) return console.log('      (not exercised here: no empty spot has a furigana as its nearest text in this browser)');
+    await page.mouse.click(spot.x, spot.y);
+    await page.waitForTimeout(1500); // the word lookup is async: give a wrong selection time to appear
+    eq(await selected(), '', 'selection after a click on empty page next to a furigana');
     await reset();
   });
 
@@ -241,19 +330,33 @@ async (page, env = {}) => {
     const before = await chromeHidden();
     const p = await charAt('景色', { index: 1 });
     await page.touchscreen.tap(p.x, p.y);
-    await until(async () => (await selected()) === '景色', 'tap selects 景色', 40000);
+    await untilSelected('景色', 'tap selects 景色', 40000, p);
     eq(await chromeHidden(), before, 'toolbars after a tap on a word');
     await reset();
+    await page.waitForTimeout(1000); // let anything still in flight from the word tap land before the blank tap
+    eq(await selected(), '', 'selection before the blank tap (anything here comes from earlier, not from the tap)');
     const spot = await until(async () => {
       const vp = page.viewportSize();
       for (const f of frames()) {
         const box = await (await f.frameElement().catch(() => null))?.boundingBox().catch(() => null);
         if (!box) continue;
         const hit = await f.evaluate((o) => {
+          // Blank = nothing but the page under the point: not an element of the text AND not inside any character's box
+          // (a glyph box can stick out of its paragraph, notably with fallback fonts).
+          const boxes = [];
+          const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          for (let n = w.nextNode(); n; n = w.nextNode())
+            for (let i = 0; i < n.length; i++) {
+              const r = document.createRange();
+              r.setStart(n, i);
+              r.setEnd(n, i + 1);
+              for (const q of r.getClientRects()) boxes.push(q);
+            }
+          const onText = (px, py) => boxes.some((q) => px >= q.left - 2 && px <= q.right + 2 && py >= q.top - 2 && py <= q.bottom + 2);
           for (let y = 120; y < o.vh - 120; y += 15)
             for (let x = 180; x < o.vw - 180; x += 15) {
               const el = document.elementFromPoint(x - o.ox, y - o.oy);
-              if (el === document.documentElement || el === document.body) return { x, y };
+              if ((el === document.documentElement || el === document.body) && !onText(x - o.ox, y - o.oy)) return { x, y };
             }
           return null;
         }, { ox: box.x, oy: box.y, vw: vp.width, vh: vp.height }).catch(() => null);
@@ -262,9 +365,35 @@ async (page, env = {}) => {
       return null;
     }, 'a blank spot on the page', 8000);
     const hidden = await chromeHidden();
+    // CI diagnosis: log every click and selection change in the book frames from here on.
+    for (const f of frames())
+      await f.evaluate(() => {
+        window.__ws = [];
+        const t0 = performance.now();
+        document.addEventListener('click', (e) => window.__ws.push(['click', Math.round(e.clientX), Math.round(e.clientY), e.pointerType, Math.round(performance.now() - t0)]), true);
+        document.addEventListener('selectionchange', () => window.__ws.push(['sel', document.getSelection()?.toString(), Math.round(performance.now() - t0)]));
+      }).catch(() => {});
     await page.touchscreen.tap(spot.x, spot.y);
     await until(async () => (await chromeHidden()) !== hidden, 'a tap on blank page toggles the toolbars', 4000);
-    eq(await selected(), '', 'selection after a tap on blank page');
+    const left = await selected();
+    if (left !== '') {
+      // CI diagnosis: where is the selected word relative to the tapped spot?
+      const where = await Promise.all(frames().map(async (f) => {
+        const box = await (await f.frameElement().catch(() => null))?.boundingBox().catch(() => null);
+        if (!box) return null;
+        return f.evaluate(({ x, y }) => {
+          const s = document.getSelection();
+          const q = s?.rangeCount ? s.getRangeAt(0).getBoundingClientRect() : null;
+          const c = document.caretPositionFromPoint?.(x, y);
+          return {
+            sel: s?.toString(), rect: q && [Math.round(q.left), Math.round(q.top), Math.round(q.right), Math.round(q.bottom)], spot: [Math.round(x), Math.round(y)],
+            el: document.elementFromPoint(x, y)?.tagName, caret: c ? [c.offsetNode.nodeType, (c.offsetNode.data || '').slice(0, 8), c.offset] : null,
+          };
+        }, { x: spot.x - box.x, y: spot.y - box.y }).catch((err) => String(err));
+      }));
+      const log = await Promise.all(frames().map((f) => f.evaluate(() => window.__ws).catch(() => null)));
+      throw new Error(`selection after a tap on blank page: expected "", got ${JSON.stringify(left)} | ${JSON.stringify(where)} | log ${JSON.stringify(log)}`);
+    }
   });
 
   const failed = results.filter((r) => !r.ok);

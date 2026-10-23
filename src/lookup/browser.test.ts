@@ -91,7 +91,8 @@ describe.skipIf(!playwright)('in a real browser', () => {
     await server?.close();
   });
 
-  describe('applyFurigana on an XHTML chapter in an iframe', () => {
+  // Loading the tokenizer's dictionary dominates these tests; a shared CI runner can need far more than vitest's 5 s default.
+  describe('applyFurigana on an XHTML chapter in an iframe', { timeout: 30_000 }, () => {
     it('adds ruby to kanji text, leaving links, emphasis and attributes exactly as they were', async () => {
       const original = await openChapter();
       await apply('furigana');
