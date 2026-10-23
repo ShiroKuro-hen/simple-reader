@@ -5,6 +5,8 @@ import { build, type Plugin } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { buildPrecache } from './src/pwa/policy';
 
+const pkg = JSON.parse(readFileSync(resolve(import.meta.dirname, 'package.json'), 'utf8')) as { version: string };
+
 const walk = (dir: string): string[] =>
   readdirSync(dir).flatMap((n) => (statSync(join(dir, n)).isDirectory() ? walk(join(dir, n)) : [join(dir, n)]));
 
@@ -45,5 +47,6 @@ export default defineConfig({
   base: './',
   build: { target: 'es2022' },
   plugins: [serviceWorker()],
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   test: { environment: 'node' },
 });

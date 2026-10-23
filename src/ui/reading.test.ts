@@ -95,4 +95,26 @@ describe('keyAction', () => {
     expect(key('a')).toBeNull();
     expect(key('Enter')).toBeNull();
   });
+  it('swaps the arrows for a right-to-left book', () => {
+    expect(key('ArrowLeft', { rtl: true })).toBe('next');
+    expect(key('ArrowRight', { rtl: true })).toBe('prev');
+  });
+  it('keeps the arrows unchanged when rtl is false or missing', () => {
+    expect(key('ArrowLeft', { rtl: false })).toBe('prev');
+    expect(key('ArrowRight', { rtl: false })).toBe('next');
+    expect(key('ArrowLeft', { rtl: undefined })).toBe('prev');
+  });
+  it('keeps the other keys unchanged for a right-to-left book', () => {
+    expect(key('PageUp', { rtl: true })).toBe('prev');
+    expect(key('PageDown', { rtl: true })).toBe('next');
+    expect(key(' ', { rtl: true })).toBe('next');
+    expect(key(' ', { rtl: true, shiftKey: true })).toBe('prev');
+    expect(key('Escape', { rtl: true })).toBe('toggle-chrome');
+    expect(key('Tab', { rtl: true })).toBe('show-chrome');
+  });
+  it('still ignores modified arrows, dialogs and text fields for a right-to-left book', () => {
+    expect(key('ArrowLeft', { rtl: true, ctrlKey: true })).toBeNull();
+    expect(key('ArrowLeft', { rtl: true, targetTag: 'INPUT' })).toBeNull();
+    expect(key('ArrowRight', { rtl: true, dialogOpen: true })).toBeNull();
+  });
 });

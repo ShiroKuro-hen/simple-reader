@@ -33,7 +33,7 @@ const THEMES: [Theme, string][] = [['light', 'Light'], ['dark', 'Dark'], ['sepia
 const LAYOUTS: [PageLayout, string][] = [['auto', 'Auto'], ['single', 'One page']];
 const MODES: [FuriganaMode, string][] = [['off', 'Off'], ['furigana', 'Furigana'], ['romaji', 'Romaji']];
 
-export function createSettings(app: App, opts: { onRestored?: () => void } = {}) {
+export function createSettings(app: App, opts: { onRestored?: () => void; comic?: boolean } = {}) {
   const dlg = sheet('sheet-settings', 'Settings');
 
   // --- appearance ---
@@ -53,6 +53,7 @@ export function createSettings(app: App, opts: { onRestored?: () => void } = {})
   const modeBtns = MODES.map(([m, name]) =>
     h('button', { type: 'button', onclick: () => app.update({ furigana: m }) }, name),
   );
+  const rtlBox = h('input', { type: 'checkbox', onchange: (e: Event) => app.update({ rtl: (e.target as HTMLInputElement).checked }) });
 
   // --- backup ---
   const cfg = loadR2();
@@ -110,6 +111,8 @@ export function createSettings(app: App, opts: { onRestored?: () => void } = {})
       h('section', {}, h('h3', {}, 'Text size'), h('div', { class: 'size-row' }, smaller, sizeLabel, larger)),
       h('section', {}, h('h3', {}, 'Page layout'), h('div', { class: 'seg', role: 'group', 'aria-label': 'Page layout' }, ...layoutBtns),
         h('p', { class: 'note' }, 'Auto shows two pages side by side on a wide window. PDFs always show one page.')),
+      h('section', { hidden: !opts.comic }, h('h3', {}, 'Comics'),
+        h('label', {}, rtlBox, ' Right to left')),
       h('section', {}, h('h3', {}, 'Japanese reading'), h('div', { class: 'seg', role: 'group', 'aria-label': 'Japanese reading' }, ...modeBtns)),
       h('section', {},
         h('h3', {}, 'Backup (Cloudflare R2)'),
@@ -126,6 +129,7 @@ export function createSettings(app: App, opts: { onRestored?: () => void } = {})
     THEMES.forEach(([t], i) => themeBtns[i]!.setAttribute('aria-pressed', String(s.theme === t)));
     LAYOUTS.forEach(([l], i) => layoutBtns[i]!.setAttribute('aria-pressed', String(s.layout === l)));
     MODES.forEach(([m], i) => modeBtns[i]!.setAttribute('aria-pressed', String(s.furigana === m)));
+    rtlBox.checked = s.rtl;
     sizeLabel.textContent = `${s.fontSize}%`;
     smaller.disabled = s.fontSize <= MIN_FONT;
     larger.disabled = s.fontSize >= MAX_FONT;

@@ -3,6 +3,7 @@ import { bookFileName, planIncoming } from './intake';
 
 const EPUB = 'application/epub+zip';
 const OCTET = 'application/octet-stream';
+const CBZ = 'application/vnd.comicbook+zip';
 
 describe('bookFileName', () => {
   it.each([
@@ -19,6 +20,10 @@ describe('bookFileName', () => {
     ['archive.zip', 'application/zip', null],
     ['book.epub.txt', 'text/plain', null],
     ['noext', null, null],
+    ['Vol 1.cbz', OCTET, 'Vol 1.cbz'], // cbz extension, whatever the MIME type
+    ['issue', CBZ, 'issue.cbz'],
+    ['issue', 'application/x-cbz', 'issue.cbz'], // the older MIME name maps to cbz too
+    ['issue (2)', OCTET, null], // octet-stream without the extension is not claimed
   ])('%j + %j -> %j', (name, mime, expected) => {
     expect(bookFileName(name, mime)).toBe(expected);
   });
@@ -38,6 +43,12 @@ describe('planIncoming', () => {
       { id: 4, fileName: 'c.pdf', type: 'application/pdf' },
     ]);
     expect(plan.skipped).toEqual([2]);
+  });
+
+  it('plans a comic sent as the older cbz MIME type with the canonical type back', () => {
+    expect(planIncoming([{ id: 7, name: 'Vol 2', mime: 'application/x-cbz' }]).take).toEqual([
+      { id: 7, fileName: 'Vol 2.cbz', type: CBZ },
+    ]);
   });
 
   it('plans nothing for nothing', () => {

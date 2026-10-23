@@ -11,9 +11,11 @@ describe('sha256Hex', () => {
 });
 
 describe('formatOf', () => {
-  it('reads the extension case-insensitively and only knows epub and pdf', () => {
+  it('reads the extension case-insensitively and knows epub, pdf and cbz', () => {
     expect(formatOf('Book.EPUB')).toBe('epub');
     expect(formatOf('a.b.pdf')).toBe('pdf');
+    expect(formatOf('Vol 1.CBZ')).toBe('cbz');
+    expect(formatOf('archive.zip')).toBeNull();
     expect(formatOf('notes.txt')).toBeNull();
     expect(formatOf('epub')).toBeNull();
   });
@@ -39,19 +41,41 @@ describe('newestFirst', () => {
 
 describe('mergeSettings', () => {
   it('fills the defaults when nothing was saved', () => {
-    expect(mergeSettings(null)).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto' });
+    expect(mergeSettings(null)).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true });
   });
   it('keeps valid saved values and fills the missing ones', () => {
-    expect(mergeSettings({ theme: 'dark', fontSize: 140 })).toEqual({ theme: 'dark', fontSize: 140, furigana: 'off', layout: 'auto' });
+    expect(mergeSettings({ theme: 'dark', fontSize: 140 })).toEqual({ theme: 'dark', fontSize: 140, furigana: 'off', layout: 'auto', rtl: true });
   });
   it('remembers the one-page layout', () => {
     expect(mergeSettings({ layout: 'single' }).layout).toBe('single');
   });
   it('replaces garbage from a hand-edited or corrupt file', () => {
-    expect(mergeSettings({ theme: 'neon', fontSize: 'big', furigana: 7, layout: 'triple' })).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto' });
+    expect(mergeSettings({ theme: 'neon', fontSize: 'big', furigana: 7, layout: 'triple' })).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true });
   });
   it('clamps absurd font sizes', () => {
     expect(mergeSettings({ fontSize: 5 }).fontSize).toBe(50);
     expect(mergeSettings({ fontSize: 9000 }).fontSize).toBe(300);
+  });
+  it('defaults comics to right to left', () => {
+    expect(mergeSettings(null).rtl).toBe(true);
+  });
+  it('keeps a saved boolean rtl, true or false', () => {
+    expect(mergeSettings({ rtl: false }).rtl).toBe(false);
+    expect(mergeSettings({ rtl: true }).rtl).toBe(true);
+  });
+  it('falls back to right to left for a non-boolean rtl', () => {
+    expect(mergeSettings({ rtl: 'false' }).rtl).toBe(true);
+    expect(mergeSettings({ rtl: 0 }).rtl).toBe(true);
+    expect(mergeSettings({ rtl: undefined }).rtl).toBe(true);
+    expect(mergeSettings({ rtl: { on: false } }).rtl).toBe(true);
+  });
+  it('gives an old settings file without rtl the right-to-left default', () => {
+    expect(mergeSettings({ theme: 'dark', fontSize: 120, furigana: 'romaji', layout: 'single' })).toEqual({
+      theme: 'dark',
+      fontSize: 120,
+      furigana: 'romaji',
+      layout: 'single',
+      rtl: true,
+    });
   });
 });

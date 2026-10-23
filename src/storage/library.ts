@@ -1,13 +1,14 @@
 import { readAnnotationFile } from '../annotations/model';
-import type { AnnotationFile, BookMeta, Progress, ReaderSettings, Storage } from '../types';
+import type { AnnotationFile, BookFormat, BookMeta, Progress, ReaderSettings, Storage } from '../types';
 import { formatOf, mergeSettings, newestFirst, sha256Hex, titleFromFilename } from './domain';
+import { readCbzInfo } from './cbz-info';
 import { readEpubInfo } from './epub-info';
 import { storage } from './index';
 import { coverDataUrl, readPdfInfo } from './meta';
 
 export { DEFAULT_SETTINGS } from './domain';
 
-const MIME = { epub: 'application/epub+zip', pdf: 'application/pdf' };
+const MIME = { epub: 'application/epub+zip', pdf: 'application/pdf', cbz: 'application/vnd.comicbook+zip' };
 
 type Found = { title?: string; author?: string; cover?: string };
 
@@ -25,8 +26,18 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
   const writeJson = (path: string, value: unknown) => fs.write(path, JSON.stringify(value));
   const getMeta = (id: string) => readJson<BookMeta>(`meta/${id}.json`);
 
-  async function inspect(blob: Blob, format: 'epub' | 'pdf'): Promise<Found> {
+  async function inspect(blob: Blob, format: BookFormat): Promise<Found> {
     if (format === 'pdf') return readPdfInfo(blob).catch(() => ({})); // the reader reports an unreadable PDF on open
+    if (format === 'cbz') {
+      let pages;
+      try {
+        pages = await readCbzInfo(blob);
+      } catch (e) {
+        throw new Error(`Not a valid CBZ file (${(e as Error).message})`);
+      }
+      const cover = pages.cover ? await coverDataUrl(pages.cover).catch(() => undefined) : undefined;
+      return { cover };
+    }
     let info;
     try {
       info = await readEpubInfo(blob);
@@ -78,6 +89,7 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
     await Promise.all([
       fs.remove(`books/${id}.epub`),
       fs.remove(`books/${id}.pdf`),
+      fs.remove(`books/${id}.cbz`),
       fs.remove(`meta/${id}.json`),
       fs.remove(`progress/${id}.json`),
       fs.remove(`annotations/${id}.json`),

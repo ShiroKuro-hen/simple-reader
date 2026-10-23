@@ -10,7 +10,7 @@ import { libIcon } from './library-icons';
 import { bookLabel } from './reading';
 import { createSettings, type App } from './settings';
 
-const isBook = (f: File) => /\.(epub|pdf)$/i.test(f.name) || /^application\/(epub\+zip|pdf)$/.test(f.type);
+const isBook = (f: File) => /\.(epub|pdf|cbz)$/i.test(f.name) || /^application\/(epub\+zip|pdf|vnd\.comicbook\+zip|x-cbz)$/.test(f.type);
 
 const SORT_KEY = 'sr.sort';
 const SORT_LABELS: Record<SortKey, string> = { added: 'Recently added', title: 'Title', author: 'Author', read: 'Recently read' };
@@ -41,7 +41,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   let sort = storedSort();
 
   const input = h('input', {
-    type: 'file', accept: '.epub,.pdf,application/epub+zip,application/pdf', multiple: true, hidden: true,
+    type: 'file', accept: '.epub,.pdf,.cbz,application/epub+zip,application/pdf,application/vnd.comicbook+zip', multiple: true, hidden: true,
     onchange: () => {
       void addFiles([...(input.files ?? [])]);
       input.value = ''; // lets the same file be picked again
@@ -101,7 +101,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
 
   async function addFiles(files: File[]) {
     const ok = files.filter(isBook);
-    if (files.length > ok.length) toast(ok.length ? `Skipped ${files.length - ok.length} unsupported file(s).` : 'Only EPUB and PDF files are supported.', 'error');
+    if (files.length > ok.length) toast(ok.length ? `Skipped ${files.length - ok.length} unsupported file(s).` : 'Only EPUB, PDF and CBZ files are supported.', 'error');
     if (!ok.length) return;
     addBtn.disabled = true;
     addLabel.textContent = 'Adding...';

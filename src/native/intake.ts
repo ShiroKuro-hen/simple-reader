@@ -6,11 +6,12 @@ import { formatOf } from '../storage/domain';
 export type Incoming = { id: number; name: string | null; mime: string | null };
 export type Plan = { take: { id: number; fileName: string; type: string }[]; skipped: number[] };
 
-const TYPE: Record<BookFormat, string> = { epub: 'application/epub+zip', pdf: 'application/pdf' };
+const TYPE: Record<BookFormat, string> = { epub: 'application/epub+zip', pdf: 'application/pdf', cbz: 'application/vnd.comicbook+zip' };
 
 const formatOfMime = (mime: string | null): BookFormat | null => {
   const m = (mime ?? '').split(';')[0]!.trim().toLowerCase();
-  return m === TYPE.epub ? 'epub' : m === TYPE.pdf ? 'pdf' : null;
+  // application/x-cbz is the older name some senders still use for the same comic archive.
+  return m === TYPE.epub ? 'epub' : m === TYPE.pdf ? 'pdf' : m === TYPE.cbz || m === 'application/x-cbz' ? 'cbz' : null;
 };
 
 /**

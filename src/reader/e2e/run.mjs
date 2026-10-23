@@ -98,7 +98,7 @@ async function selectWord(word) {
   await ev(() => sr.waitFor(() => session.selects.length > 0, 'a TextSelection'));
   return { sel: await ev(() => session.selects.at(-1)), click: { x: r.x + r.width / 2, y: r.y + r.height / 2 } };
 }
-const THEME = (theme, fontSize = 100, layout = 'auto') => ({ theme, fontSize, furigana: 'off', layout });
+const THEME = (theme, fontSize = 100, layout = 'auto') => ({ theme, fontSize, furigana: 'off', layout, rtl: true });
 
 // ---- Storage contract on the real OPFS ----------------------------------------------------------------------
 const contractNames = await (async () => {
@@ -573,6 +573,172 @@ await test('pdf: here() names the page and its first words; selections have no l
   await setAnnotations([note('3', 'harbour')]);
   await ev(() => session.handle.onAnnotationClick(() => {}));
   assert.equal(await ev(() => document.querySelectorAll('.sr-pdf svg').length), 0);
+});
+
+// ---- Manga (cbz) reader ----------------------------------------------------------------------------------------
+// manga.cbz stores its pages as 1,2,3,10,11,4. Reading order is 1,2,3,4,10,11, so page 4 is 4.png (cyan), not 10.png.
+const ORDER = ['1.png', '2.png', '3.png', '4.png', '10.png', '11.png'];
+const COLOUR = {
+  '1.png': [220, 40, 40], '2.png': [40, 180, 60], '3.png': [40, 80, 220],
+  '4.png': [30, 200, 220], '10.png': [240, 220, 30], '11.png': [200, 40, 200],
+};
+const MANGA = (layout = 'auto', rtl = true, fontSize = 100, theme = 'light') => ({ theme, fontSize, furigana: 'off', layout, rtl });
+const isColour = (rgb, file, what) =>
+  assert.ok(COLOUR[file].every((v, i) => Math.abs(v - rgb[i]) <= 8), `${what}: got rgb(${rgb}), want ${file} ${COLOUR[file]}`);
+/** The page images on screen, left to right: page number, x position, and the colour at the centre of the image. */
+const shownPages = () =>
+  ev(() =>
+    [...document.querySelectorAll('.sr-manga img')]
+      .map((img) => {
+        const c = document.createElement('canvas');
+        c.width = img.naturalWidth;
+        c.height = img.naturalHeight;
+        const g = c.getContext('2d');
+        g.drawImage(img, 0, 0);
+        const [r, gr, b] = g.getImageData(c.width >> 1, c.height >> 1, 1, 1).data;
+        return { page: Number(img.alt.replace('Page ', '')), x: img.getBoundingClientRect().x, colour: [r, gr, b] };
+      })
+      .sort((a, b) => a.x - b.x),
+  );
+const pageNumbers = async () => (await shownPages()).map((p) => p.page);
+
+await test('cbz: opens on page 1 of 6, and the first relocation says so', async () => {
+  await open('manga.cbz', { settings: MANGA() });
+  assert.deepEqual(await last(), { location: '1', fraction: 1 / 6, label: '1 / 6' });
+  assert.deepEqual(await pageNumbers(), [1], 'the cover is alone');
+  isColour((await shownPages())[0].colour, '1.png', 'page 1');
+});
+
+await test('cbz: pages follow natural order, so the fourth page is 4.png and not 10.png', async () => {
+  await open('manga.cbz', { settings: MANGA('single') });
+  for (let n = 1; n <= 6; n++) {
+    if (n > 1) await nav('next');
+    const [p] = await shownPages();
+    assert.equal(p.page, n);
+    isColour(p.colour, ORDER[n - 1], `page ${n}`);
+  }
+});
+
+await test('cbz: next and prev turn one page and stop at both ends', async () => {
+  await open('manga.cbz', { settings: MANGA('single') });
+  const count = () => ev(() => session.relocs.length);
+  await ev(() => session.handle.prev());
+  await page.waitForTimeout(300);
+  assert.equal(await count(), 1, 'no relocation before the first page');
+  for (let n = 2; n <= 6; n++) assert.equal((await nav('next')).label, `${n} / 6`);
+  await ev(() => session.handle.next());
+  await page.waitForTimeout(300);
+  assert.equal(await count(), 6, 'no relocation past the last page');
+  await ev(() => session.handle.goTo('99')); // clamps to page 6, which is where we are
+  await page.waitForTimeout(300);
+  assert.equal(await count(), 6, 'goTo past the end is already the last page');
+  assert.equal((await nav('prev')).label, '5 / 6');
+  assert.equal((await nav('goTo', '99')).label, '6 / 6', 'goTo clamps to the last page');
+  assert.equal((await nav('goTo', '0')).label, '1 / 6', 'goTo clamps to the first page');
+});
+
+await test('cbz: auto layout shows two pages side by side; right to left puts the later page on the right', async () => {
+  await open('manga.cbz', { settings: MANGA('auto', true) });
+  await nav('next');
+  let s = await shownPages();
+  assert.deepEqual(s.map((p) => p.page), [3, 2], 'spread 2-3, displayed right to left');
+  isColour(s[0].colour, '3.png', 'left of the spread');
+  isColour(s[1].colour, '2.png', 'right of the spread');
+  assert.equal((await last()).label, '2 / 6');
+  await nav('next');
+  s = await shownPages();
+  assert.deepEqual(s.map((p) => p.page), [5, 4], 'spread 4-5');
+  isColour(s[1].colour, '4.png', 'page 4 on the right');
+  await nav('next');
+  assert.deepEqual(await pageNumbers(), [6], 'the last page is alone');
+  assert.equal((await last()).label, '6 / 6');
+});
+
+await test('cbz: left to right shows the earlier page on the left, and the setting flips the order live', async () => {
+  await open('manga.cbz', { settings: MANGA('auto', false) });
+  await nav('next');
+  assert.deepEqual(await pageNumbers(), [2, 3]);
+  const before = await ev(() => session.relocs.length);
+  await ev((s) => session.handle.setSettings(s), MANGA('auto', true));
+  await ev((n) => sr.waitFor(() => session.relocs.length > n, 'relocate after the rtl change'), before);
+  assert.deepEqual(await pageNumbers(), [3, 2]);
+});
+
+await test('cbz: a saved location resumes on its page, a spread resumes on its first page, a location past the end clamps', async () => {
+  await open('manga.cbz', { settings: MANGA('auto', true), location: '4' });
+  assert.deepEqual(await last(), { location: '4', fraction: 4 / 6, label: '4 / 6' });
+  assert.deepEqual(await pageNumbers(), [5, 4]);
+  await ev(() => session.handle.destroy());
+  await ev(() => document.getElementById('host').replaceChildren());
+  await open('manga.cbz', { settings: MANGA('auto', true), location: '5' });
+  assert.equal((await last()).location, '4', 'page 5 sits in the spread that starts at 4');
+  await ev(() => session.handle.destroy());
+  await ev(() => document.getElementById('host').replaceChildren());
+  await open('manga.cbz', { settings: MANGA('auto', true), location: '99' });
+  assert.equal((await last()).location, '6');
+});
+
+await test('cbz: goToFraction lands on the page that fraction names', async () => {
+  await open('manga.cbz', { settings: MANGA('single') });
+  const half = await nav('goToFraction', 0.5);
+  assert.equal(half.label, '3 / 6');
+  assert.equal(half.location, '3');
+  assert.deepEqual(await pageNumbers(), [3]);
+  isColour((await shownPages())[0].colour, '3.png', 'page 3');
+  assert.equal((await nav('goToFraction', 0)).label, '1 / 6');
+  assert.equal((await nav('goToFraction', 1)).label, '6 / 6');
+});
+
+await test('cbz: only the pages around the current one are decoded, and destroy revokes them all', async () => {
+  const baseline = await ev(() => __liveBlobUrls());
+  await open('manga.cbz', { settings: MANGA('auto', true) });
+  const check = async () => {
+    const loc = (await last()).location;
+    const keep = await ev((p) => sr.mangaNav.pagesToKeep(p, 6, true, 3, 1).length, Number(loc));
+    assert.equal((await ev(() => __liveBlobUrls())) - baseline, keep, `object URLs while on page ${loc}`);
+  };
+  await check();
+  for (let i = 0; i < 3; i++) {
+    await nav('next');
+    await check();
+  }
+  for (let i = 0; i < 3; i++) {
+    await nav('prev');
+    await check();
+  }
+  await ev(() => session.handle.destroy());
+  assert.equal(await ev(() => __liveBlobUrls()), baseline);
+  assert.equal(await ev(() => document.getElementById('host').children.length), 0);
+});
+
+await test('cbz: a zip with no images, or a damaged one, fails to open and leaves the container clean', async () => {
+  for (const [name, why] of [['no-pages.cbz', /no pages/], ['corrupt.cbz', /./]]) {
+    const msg = await ev(async (n) => {
+      try {
+        await sr.openFixture(n);
+        return null;
+      } catch (e) {
+        return String(e);
+      }
+    }, name);
+    assert.match(msg ?? '', why, `${name} should reject for its own reason`);
+    assert.equal(await ev(() => document.getElementById('host').children.length), 0, name);
+  }
+});
+
+await test('cbz: a larger font size zooms and scrolls, a page turn returns to the top-left, dark does not invert the pages', async () => {
+  await open('manga.cbz', { settings: MANGA('single', true, 200) });
+  const scrolls = () => ev(() => { const r = document.querySelector('.sr-manga'); return r.scrollHeight > r.clientHeight; });
+  assert.equal(await scrolls(), true, 'zoomed past the viewport');
+  await ev(() => { document.querySelector('.sr-manga').scrollTop = 80; });
+  await nav('next');
+  assert.deepEqual(await ev(() => { const r = document.querySelector('.sr-manga'); return [r.scrollTop, r.scrollLeft]; }), [0, 0]);
+  await ev((s) => session.handle.setSettings(s), MANGA('single', true, 200, 'dark'));
+  const look = await ev(() => ({
+    bg: getComputedStyle(document.querySelector('.sr-manga')).backgroundColor,
+    filter: getComputedStyle(document.querySelector('.sr-manga img')).filter,
+  }));
+  assert.deepEqual(look, { bg: 'rgb(18, 18, 18)', filter: 'none' });
 });
 
 await browser.close();
