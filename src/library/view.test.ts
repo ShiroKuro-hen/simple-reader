@@ -33,6 +33,38 @@ describe('libraryView', () => {
   });
 });
 
+describe('libraryView entries', () => {
+  const saga = [
+    book('v10', { title: 'Vol 10', series: 'Lord of the Mysteries', addedAt: 1, tags: ['fav'] }),
+    book('v2', { title: 'Vol 2', series: 'Lord of the Mysteries', addedAt: 2 }),
+    book('solo', { title: 'Solo', addedAt: 3 }),
+    book('v1', { title: 'Vol 1', series: 'lord of the mysteries', addedAt: 4, tags: ['fav'] }),
+  ];
+  const entriesOf = (query: string, tags: string[] = []) => libraryView(saga, { query, tags, sort: 'title' }).entries;
+
+  // The series is shown with the first spelling in the sorted result: "Vol 1" is first and it is lowercase.
+  it('collapses a series into one entry in the filtered result, placed by sort order', () => {
+    const entries = entriesOf('');
+    expect(entries.map((e) => e.kind)).toEqual(['book', 'series']); // "Solo" sorts before "Vol 1"
+    expect(entries[1]).toEqual({ kind: 'series', name: 'lord of the mysteries', books: [saga[3], saga[1], saga[0]] });
+  });
+
+  it('only collapses the volumes that survive the tag filter', () => {
+    expect(entriesOf('', ['fav'])).toEqual([{ kind: 'series', name: 'lord of the mysteries', books: [saga[3], saga[0]] }]);
+  });
+
+  it('a search for the series name shows the whole series', () => {
+    const view = libraryView(saga, { query: 'mysteries', tags: [], sort: 'title' });
+    expect(view.books.map((b) => b.id)).toEqual(['v1', 'v2', 'v10']);
+    expect(view.entries).toEqual([{ kind: 'series', name: 'lord of the mysteries', books: [saga[3], saga[1], saga[0]] }]);
+  });
+
+  it('has no entries when the state is not results', () => {
+    expect(libraryView([], { query: '', tags: [], sort: 'added' }).entries).toEqual([]);
+    expect(libraryView(saga, { query: 'zzz', tags: [], sort: 'added' }).entries).toEqual([]);
+  });
+});
+
 describe('countLabel', () => {
   it.each([
     [0, 0, '0 books'],

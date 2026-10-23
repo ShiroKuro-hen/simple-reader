@@ -97,6 +97,47 @@ describe('removeBook', () => {
   });
 });
 
+describe('addBook with a series', () => {
+  it('stores the trimmed series with a new book', async () => {
+    const { lib } = setup();
+    const meta = await lib.addBook(fixtureFile('book-en.epub'), { series: '  Lord of the Mysteries ' });
+    expect(meta.series).toBe('Lord of the Mysteries');
+    expect((await lib.listBooks())[0]?.series).toBe('Lord of the Mysteries');
+  });
+
+  it('adding the same bytes with another series updates the stored book and bumps updatedAt', async () => {
+    const { fs, lib } = setup();
+    const first = await lib.addBook(fixtureFile('book-en.epub'));
+    const again = await lib.addBook(fixtureFile('book-en-copy.epub'), { series: 'Saga' });
+    expect(again).toEqual({ ...first, series: 'Saga', updatedAt: again.updatedAt });
+    expect(again.updatedAt).toBeGreaterThan(first.addedAt);
+    expect((await lib.listBooks()).map((b) => b.series)).toEqual(['Saga']);
+    expect(await fs.list('books/')).toEqual([`books/${first.id}.epub`]);
+  });
+
+  it('adding the same bytes without a series leaves the stored series alone', async () => {
+    const { lib } = setup();
+    const first = await lib.addBook(fixtureFile('book-en.epub'), { series: 'Saga' });
+    const again = await lib.addBook(fixtureFile('book-en-copy.epub'));
+    expect(again).toEqual(first);
+    expect(again.updatedAt).toBeUndefined();
+  });
+
+  it('ignores a blank series, so it neither sets nor replaces one', async () => {
+    const { lib } = setup();
+    const plain = await lib.addBook(fixtureFile('book-en.epub'), { series: '   ' });
+    expect(plain.series).toBeUndefined();
+    const again = await lib.addBook(fixtureFile('book-en-copy.epub'), { series: '  ' });
+    expect(again).toEqual(plain);
+  });
+
+  it('re-adding with the stored series returns the book unchanged', async () => {
+    const { lib } = setup();
+    const first = await lib.addBook(fixtureFile('book-en.epub'), { series: 'Saga' });
+    expect(await lib.addBook(fixtureFile('book-en-copy.epub'), { series: 'Saga' })).toEqual(first);
+  });
+});
+
 describe('progress', () => {
   it('round-trips and keeps the latest save', async () => {
     const { lib } = setup();

@@ -175,6 +175,9 @@ button { font: inherit; color: inherit; }
   gap: 28px 20px;
 }
 .card { position: relative; min-width: 0; }
+.card.series .cover { box-shadow: 4px 4px 0 var(--surface-2), 4px 4px 0 1px var(--line), var(--shadow); }
+.series-head { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 0 0 16px -10px; }
+.series-head h2 { font-size: 19px; font-weight: 650; line-height: 1.25; overflow-wrap: anywhere; }
 .card-open {
   display: block;
   width: 100%;

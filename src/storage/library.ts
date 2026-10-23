@@ -48,14 +48,21 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
     return { title: info.title, author: info.author, cover };
   }
 
-  async function addBook(file: File): Promise<BookMeta> {
+  /** A book already in the library keeps its metadata, except that a different non-blank `series` is saved onto it. */
+  async function addBook(file: File, opts: { series?: string } = {}): Promise<BookMeta> {
     const format = formatOf(file.name);
     if (!format) throw new Error(`Unsupported file type: ${file.name}`);
     if (file.size === 0) throw new Error(`The file is empty: ${file.name}`);
     const buf = await file.arrayBuffer();
     const id = await sha256Hex(buf);
+    const series = opts.series?.trim() || undefined;
     const existing = await getMeta(id);
-    if (existing) return existing;
+    if (existing) {
+      if (!series || series === existing.series) return existing;
+      const updated: BookMeta = { ...existing, series, updatedAt: clock() };
+      await writeJson(`meta/${id}.json`, updated);
+      return updated;
+    }
 
     const found = await inspect(new Blob([buf]), format);
     const meta: BookMeta = {
@@ -66,6 +73,7 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
       size: buf.byteLength,
       addedAt: clock(),
       cover: found.cover,
+      series,
     };
     await fs.write(`books/${id}.${format}`, new Uint8Array(buf));
     await writeJson(`meta/${id}.json`, meta);

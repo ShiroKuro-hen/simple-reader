@@ -73,34 +73,52 @@ export function createSettings(app: App, opts: { onRestored?: () => void; comic?
     } }, icon('copy'), 'Copy'));
   const pushBtn = h('button', { class: 'btn primary', type: 'button', onclick: () => run('push') }, 'Back up now');
   const pullBtn = h('button', { class: 'btn', type: 'button', onclick: () => run('pull') }, 'Restore');
+  const importBtn = h('button', { class: 'btn', type: 'button', onclick: () => run('import') }, 'Import folders');
+  const busyBtns = [pushBtn, pullBtn, importBtn];
 
   function say(text: string, isError = false) {
     status.textContent = text;
     status.classList.toggle('err', isError);
   }
 
-  async function run(kind: 'push' | 'pull') {
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+  async function run(kind: 'push' | 'pull' | 'import') {
     if (Object.values(cfg).some((v) => !v)) return say('Fill in all four fields first.', true);
-    pushBtn.disabled = pullBtn.disabled = true;
-    say(kind === 'push' ? 'Backing up...' : 'Restoring...');
+    busyBtns.forEach((b) => (b.disabled = true));
+    say(kind === 'push' ? 'Backing up...' : kind === 'pull' ? 'Restoring...' : 'Importing...');
     try {
       const r2 = await import('../sync/r2');
       if (kind === 'push') {
         const { uploaded } = await r2.pushToR2(cfg, storage);
-        say(uploaded ? `Backed up ${uploaded} file${uploaded === 1 ? '' : 's'}.` : 'Everything is already backed up.');
-      } else {
+        say(uploaded ? `Backed up ${plural(uploaded, 'file')}.` : 'Everything is already backed up.');
+      } else if (kind === 'pull') {
         const { downloaded } = await r2.pullFromR2(cfg, storage);
-        say(downloaded ? `Restored ${downloaded} file${downloaded === 1 ? '' : 's'}.` : 'Nothing new to restore.');
+        say(downloaded ? `Restored ${plural(downloaded, 'file')}.` : 'Nothing new to restore.');
         if (downloaded) opts.onRestored?.();
+      } else {
+        const { addBook } = await import('../storage/library');
+        const { books, series, failed } = await r2.importSeriesFolders(
+          cfg,
+          (file, name) => addBook(file, { series: name }),
+          (done, total) => say(`Importing ${done} / ${total}...`),
+        );
+        if (books + failed.length === 0) say('Nothing to import.');
+        else {
+          const text = `Imported ${plural(books, 'book')} in ${plural(series, 'series')}.`;
+          say(failed.length ? `${text} ${failed.length} failed, first: ${failed[0]}.` : text, failed.length > 0);
+        }
+        if (books) opts.onRestored?.();
       }
       hint.hidden = true;
     } catch (e) {
-      say(`${kind === 'push' ? 'Backup' : 'Restore'} failed: ${e instanceof Error ? e.message : 'unknown error'}`, true);
+      const label = kind === 'push' ? 'Backup' : kind === 'pull' ? 'Restore' : 'Import';
+      say(`${label} failed: ${e instanceof Error ? e.message : 'unknown error'}`, true);
       corsPre.textContent = (await import('../sync/r2')).describeCors();
       hint.hidden = false;
       hint.open = true;
     } finally {
-      pushBtn.disabled = pullBtn.disabled = false;
+      busyBtns.forEach((b) => (b.disabled = false));
     }
   }
 
@@ -120,7 +138,8 @@ export function createSettings(app: App, opts: { onRestored?: () => void; comic?
         h('div', { class: 'fields' },
           field('accountId', 'Account ID'), field('bucket', 'Bucket'),
           field('accessKeyId', 'Access key ID'), field('secretAccessKey', 'Secret access key', 'password')),
-        h('div', { class: 'row' }, pushBtn, pullBtn),
+        h('div', { class: 'row' }, pushBtn, pullBtn, importBtn),
+        h('p', { class: 'note' }, 'Reads folders in your bucket, e.g. Series name/Vol 1.epub, and adds them as a series.'),
         status, hint),
     ),
   );

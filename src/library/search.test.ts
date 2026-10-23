@@ -29,6 +29,12 @@ describe('matches', () => {
   const norway = book({ title: 'ノルウェイの森' });
   const odd = book({ title: 'Regex (test) [x] .*' });
 
+  it('matches the series name, accent-insensitively', () => {
+    const volume = book({ title: 'Vol 1', series: 'Señor de los Misterios' });
+    expect(matches(volume, 'senor misterios')).toBe(true);
+    expect(matches(volume, 'lord')).toBe(false);
+  });
+
   it.each([
     [senal, 'senal', true],
     [senal, 'SEÑAL', true],

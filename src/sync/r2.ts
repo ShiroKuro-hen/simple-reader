@@ -5,6 +5,7 @@
 // The network layer is tested against a REAL S3 server: see r2.s3.test.ts.
 import { AwsClient } from 'aws4fetch';
 import type { R2Config, Storage } from '../types';
+import { seriesFromKey } from '../library/series';
 import { planSync, type Direction, type Snapshot } from './plan';
 
 /** The CORS rule the user must paste in the R2 dashboard (Bucket > Settings > CORS policy). */
@@ -158,4 +159,61 @@ export async function pushToR2(cfg: R2Config, storage: Storage): Promise<{ uploa
 
 export async function pullFromR2(cfg: R2Config, storage: Storage): Promise<{ downloaded: number }> {
   return { downloaded: await run('pull', cfg, storage) };
+}
+
+// --- folders of plain files in the bucket, imported as series ---------------------------
+const naturalOrder = new Intl.Collator(undefined, { numeric: true });
+const IMPORT_PARALLEL = 3;
+
+/** Every series book in the bucket (all pages), grouped by folder, in natural order. */
+async function seriesGroups(r2: ReturnType<typeof bucket>): Promise<{ series: string; keys: string[] }[]> {
+  const groups = new Map<string, string[]>();
+  for (const key of await r2.list('')) {
+    const hit = seriesFromKey(key);
+    if (hit) groups.set(hit.series, [...(groups.get(hit.series) ?? []), key]);
+  }
+  return [...groups]
+    .sort(([a], [b]) => naturalOrder.compare(a, b))
+    .map(([series, keys]) => ({ series, keys: keys.sort(naturalOrder.compare) }));
+}
+
+export async function listSeriesFolders(cfg: R2Config): Promise<{ series: string; keys: string[] }[]> {
+  return seriesGroups(bucket(cfg));
+}
+
+/**
+ * Downloads each series book and hands it to `add`. A book that fails (download or add) is listed
+ * by its key in `failed` and does not stop the others. Errors are not copied into the result,
+ * so no credential can end up there.
+ */
+export async function importSeriesFolders(
+  cfg: R2Config,
+  add: (file: File, series: string) => Promise<unknown>,
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ books: number; series: number; failed: string[] }> {
+  const r2 = bucket(cfg);
+  const items = (await seriesGroups(r2)).flatMap(({ series, keys }) => keys.map((key) => ({ key, series })));
+  const imported = new Array<boolean>(items.length);
+  let done = 0;
+  await pool(
+    items.map((item, index) => ({ ...item, index })),
+    IMPORT_PARALLEL,
+    async ({ key, series, index }) => {
+      try {
+        const data = await r2.get(key);
+        if (!data) throw new Error('missing');
+        await add(new File([data as BlobPart], key.slice(key.lastIndexOf('/') + 1)), series);
+        imported[index] = true;
+      } catch {
+        imported[index] = false;
+      }
+      onProgress?.(++done, items.length);
+    },
+  );
+  const ok = items.filter((_, i) => imported[i]);
+  return {
+    books: ok.length,
+    series: new Set(ok.map((i) => i.series)).size,
+    failed: items.filter((_, i) => !imported[i]).map((i) => i.key),
+  };
 }
