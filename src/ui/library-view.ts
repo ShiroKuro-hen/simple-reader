@@ -1,4 +1,5 @@
-import type { BookMeta, Progress } from '../types';
+import type { BookFormat, BookMeta, Progress } from '../types';
+import { chooseFormats, planFolderImport, seriesNameFor, type FolderPlan } from '../library/folder-import';
 import { parseSortKey, SORT_KEYS, type SortKey } from '../library/sort';
 import { addTag, cleanTags, MAX_TAG_LENGTH, MAX_TAGS, removeTag, tagCounts, type AddResult } from '../library/tags';
 import { countLabel, libraryView } from '../library/view';
@@ -12,6 +13,8 @@ import { bookLabel } from './reading';
 import { createSettings, type App } from './settings';
 
 type SeriesEntry = Extract<Entry, { kind: 'series' }>;
+
+const FORMAT_NAMES: Record<BookFormat, string> = { epub: 'EPUB', pdf: 'PDF', cbz: 'CBZ' };
 
 const isBook = (f: File) => /\.(epub|pdf|cbz)$/i.test(f.name) || /^application\/(epub\+zip|pdf|vnd\.comicbook\+zip|x-cbz)$/.test(f.type);
 
@@ -54,6 +57,9 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   });
   const addLabel = h('span', {}, 'Add books');
   const addBtn = h('button', { class: 'btn primary', type: 'button', onclick: () => input.click() }, icon('plus'), addLabel);
+  // A folder picker is made on each click rather than kept in the page, so `input[type=file]` still means the book picker.
+  let folderPicker: HTMLInputElement | undefined;
+  const addFolderBtn = h('button', { class: 'btn', type: 'button', onclick: () => pickFolder() }, 'Add folder');
   const installBtn = h('button', { class: 'btn install-btn', type: 'button', hidden: true,
     onclick: () => void install?.prompt() }, libIcon('download'), h('span', { class: 'btn-label' }, 'Install app'));
   const syncInstall = () => { installBtn.hidden = !install?.available(); };
@@ -80,7 +86,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   const lib = h('div', { class: 'lib' },
     h('header', { class: 'lib-head' },
       h('div', { class: 'brand' }, h('span', { class: 'logo' }, icon('book')), h('h1', {}, 'simple-reader')),
-      h('div', { class: 'lib-actions' }, installBtn, addBtn, iconButton('settings', 'Settings', settings.open)),
+      h('div', { class: 'lib-actions' }, installBtn, addFolderBtn, addBtn, iconButton('settings', 'Settings', settings.open)),
     ),
     main,
     h('div', { class: 'drop-overlay', 'aria-hidden': 'true' }, 'Drop to add to your library'),
@@ -104,24 +110,116 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     void addFiles([...(e.dataTransfer?.files ?? [])]);
   });
 
+  /** Adds files one by one behind the busy "Add books" button; a failing file is reported and the rest still go in. */
+  async function addBooks(files: File[], series?: string): Promise<number> {
+    addBtn.disabled = true;
+    let added = 0;
+    try {
+      for (const [i, f] of files.entries()) {
+        addLabel.textContent = series ? `Adding ${i + 1} of ${files.length}...` : 'Adding...';
+        try {
+          await addBook(f, series ? { series } : {});
+          added++;
+        } catch {
+          toast(`Couldn't add "${f.name}". The file may be damaged.`, 'error');
+        }
+      }
+    } finally {
+      addBtn.disabled = false;
+      addLabel.textContent = 'Add books';
+    }
+    return added;
+  }
+
   async function addFiles(files: File[]) {
     const ok = files.filter(isBook);
     if (files.length > ok.length) toast(ok.length ? `Skipped ${files.length - ok.length} unsupported file(s).` : 'Only EPUB, PDF and CBZ files are supported.', 'error');
     if (!ok.length) return;
-    addBtn.disabled = true;
-    addLabel.textContent = 'Adding...';
-    let added = 0;
-    for (const f of ok) {
-      try {
-        await addBook(f);
-        added++;
-      } catch {
-        toast(`Couldn't add "${f.name}". The file may be damaged.`, 'error');
-      }
-    }
-    addBtn.disabled = false;
-    addLabel.textContent = 'Add books';
+    const added = await addBooks(ok);
     if (added) toast(`Added ${added} book${added === 1 ? '' : 's'}`);
+    await refresh();
+  }
+
+  function pickFolder() {
+    folderPicker?.remove();
+    const picker = h('input', { type: 'file', webkitdirectory: true, multiple: true, hidden: true,
+      onchange: () => {
+        const files = [...(picker.files ?? [])];
+        picker.remove();
+        const plan = planFolderImport(files.map((f) => f.webkitRelativePath));
+        if (!plan.books.length) {
+          toast('No EPUB, PDF or CBZ files in that folder.', 'error');
+          return;
+        }
+        openFolderDialog(files, plan);
+      } });
+    folderPicker = picker;
+    lib.append(picker);
+    picker.click();
+  }
+
+  /** Names the series after the folder and picks the formats; nothing is added until "Add" is pressed. */
+  function openFolderDialog(files: File[], plan: FolderPlan) {
+    const folder = plan.folder;
+    const dlg = sheet('folder-sheet', `Add folder "${folder}"`);
+    const nameInput = h('input', { type: 'text', autocomplete: 'off', spellcheck: 'false', required: true });
+    nameInput.value = folder;
+    const summary = h('p', { class: 'folder-summary', role: 'status', 'aria-live': 'polite' });
+    const addSubmit = h('button', { class: 'btn primary', type: 'submit' }, 'Add');
+    const boxes = (['epub', 'pdf', 'cbz'] as BookFormat[]).map((format) => {
+      const box = h('input', { type: 'checkbox' });
+      box.checked = plan.counts[format] > 0;
+      box.disabled = plan.counts[format] === 0;
+      box.addEventListener('change', update);
+      return { format, box, label: h('label', { class: 'folder-format' }, box, `${FORMAT_NAMES[format]} (${plan.counts[format]})`) };
+    });
+    const chosenFormats = () => new Set(boxes.filter((b) => b.box.checked).map((b) => b.format));
+
+    function update() {
+      const chosen = chosenFormats();
+      const n = chooseFormats(plan, chosen).length;
+      const series = seriesNameFor(nameInput.value, folder);
+      addSubmit.disabled = !chosen.size || !series;
+      summary.textContent = !chosen.size
+        ? 'Choose at least one format'
+        : !series ? 'Type a series name'
+        : `${n} book${n === 1 ? '' : 's'} will be added to "${series}"`;
+    }
+    nameInput.addEventListener('input', update);
+
+    const form = h('form', { class: 'folder-form', onsubmit: (e: Event) => {
+      e.preventDefault();
+      const series = seriesNameFor(nameInput.value, folder);
+      if (addSubmit.disabled || !series) return;
+      const chosen = chooseFormats(plan, chosenFormats()).map((b) => files[b.index]!);
+      dlg.close();
+      void addFolder(chosen, series);
+    } },
+      h('h2', {}, `Add folder "${folder}"`),
+      h('label', { class: 'field' }, h('span', {}, 'Series name'), nameInput),
+      h('fieldset', { class: 'formats' }, h('legend', {}, 'Formats'), ...boxes.map((b) => b.label)),
+      summary,
+      h('div', { class: 'folder-actions' },
+        h('button', { class: 'btn', type: 'button', onclick: () => dlg.close() }, 'Cancel'),
+        addSubmit),
+    );
+    dlg.append(form);
+    dlg.addEventListener('close', () => {
+      dlg.remove();
+      addFolderBtn.focus();
+    });
+    lib.append(dlg);
+    update();
+    dlg.showModal();
+    nameInput.focus();
+  }
+
+  async function addFolder(chosen: File[], series: string) {
+    const added = await addBooks(chosen, series);
+    const failed = chosen.length - added;
+    const message = [added ? `Added ${added} book${added === 1 ? '' : 's'} to "${series}".` : '', failed ? `${failed} failed.` : '']
+      .filter(Boolean).join(' ');
+    if (message) toast(message, failed ? 'error' : 'info');
     await refresh();
   }
 

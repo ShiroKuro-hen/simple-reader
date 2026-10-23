@@ -111,7 +111,7 @@ Taken from [PLAN.md](PLAN.md) (written in Spanish). Checked means it exists toda
 - [ ] Right-to-left and vertical EPUB, in-book search
 - [x] Highlights, notes and bookmarks in EPUB (PDF: bookmarks only; PDF highlights pending)
 - [x] Library series: a folder of volumes in your R2 bucket imports as one series (Settings > Import folders)
-- [ ] Library: import whole folders from the device
+- [x] Library: add a whole folder from the device (Add folder): the folder name becomes the series, and you pick EPUB, PDF and/or CBZ
 - [x] PWA with offline support
 - [ ] Desktop and Android: CI builds exist; test on real devices, sign releases, check lookups under the native origin
 - [ ] Optional: custom CSS and remappable keys, user dictionary
