@@ -318,7 +318,24 @@ async (page, env = {}) => {
     const hidden = await chromeHidden();
     await page.touchscreen.tap(spot.x, spot.y);
     await until(async () => (await chromeHidden()) !== hidden, 'a tap on blank page toggles the toolbars', 4000);
-    eq(await selected(), '', 'selection after a tap on blank page');
+    const left = await selected();
+    if (left !== '') {
+      // CI diagnosis: where is the selected word relative to the tapped spot?
+      const where = await Promise.all(frames().map(async (f) => {
+        const box = await (await f.frameElement().catch(() => null))?.boundingBox().catch(() => null);
+        if (!box) return null;
+        return f.evaluate(({ x, y }) => {
+          const s = document.getSelection();
+          const q = s?.rangeCount ? s.getRangeAt(0).getBoundingClientRect() : null;
+          const c = document.caretPositionFromPoint?.(x, y);
+          return {
+            sel: s?.toString(), rect: q && [Math.round(q.left), Math.round(q.top), Math.round(q.right), Math.round(q.bottom)], spot: [Math.round(x), Math.round(y)],
+            el: document.elementFromPoint(x, y)?.tagName, caret: c ? [c.offsetNode.nodeType, (c.offsetNode.data || '').slice(0, 8), c.offset] : null,
+          };
+        }, { x: spot.x - box.x, y: spot.y - box.y }).catch((err) => String(err));
+      }));
+      throw new Error(`selection after a tap on blank page: expected "", got ${JSON.stringify(left)} | ${JSON.stringify(where)}`);
+    }
   });
 
   const failed = results.filter((r) => !r.ok);
