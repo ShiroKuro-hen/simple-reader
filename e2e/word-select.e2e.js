@@ -292,10 +292,22 @@ async (page, env = {}) => {
         const box = await (await f.frameElement().catch(() => null))?.boundingBox().catch(() => null);
         if (!box) continue;
         const hit = await f.evaluate((o) => {
+          // Blank = nothing but the page under the point: not an element of the text AND not inside any character's box
+          // (a glyph box can stick out of its paragraph, notably with fallback fonts).
+          const boxes = [];
+          const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          for (let n = w.nextNode(); n; n = w.nextNode())
+            for (let i = 0; i < n.length; i++) {
+              const r = document.createRange();
+              r.setStart(n, i);
+              r.setEnd(n, i + 1);
+              for (const q of r.getClientRects()) boxes.push(q);
+            }
+          const onText = (px, py) => boxes.some((q) => px >= q.left - 2 && px <= q.right + 2 && py >= q.top - 2 && py <= q.bottom + 2);
           for (let y = 120; y < o.vh - 120; y += 15)
             for (let x = 180; x < o.vw - 180; x += 15) {
               const el = document.elementFromPoint(x - o.ox, y - o.oy);
-              if (el === document.documentElement || el === document.body) return { x, y };
+              if ((el === document.documentElement || el === document.body) && !onText(x - o.ox, y - o.oy)) return { x, y };
             }
           return null;
         }, { ox: box.x, oy: box.y, vw: vp.width, vh: vp.height }).catch(() => null);
