@@ -41,8 +41,13 @@ function japaneseAt(doc: Document, x: number, y: number): { node: Text; index: n
   return null;
 }
 
-/** Selects the word holding the character at `hit`, using the block's base text (readings left out). */
-async function selectWordAt(doc: Document, hit: { node: Text; index: number }): Promise<void> {
+/**
+ * Selects the word under (x, y), using the block's base text (readings left out). The page can be rewritten while the
+ * tokenizer works (furigana replaces text nodes), so a vanished node means: look again at the same point, once.
+ */
+async function selectWordAt(doc: Document, x: number, y: number, retries = 1): Promise<void> {
+  const hit = japaneseAt(doc, x, y);
+  if (!hit) return;
   const block = hit.node.parentElement?.closest(BLOCK) ?? doc.body;
   const parts: Text[] = [];
   let offset = -1;
@@ -58,6 +63,7 @@ async function selectWordAt(doc: Document, hit: { node: Text; index: number }): 
     // Imported here, not at the top: a book with no Japanese never loads the tokenizer or its dictionary.
     const { tokenize } = await import('../lookup/ja');
     const tokens = (await tokenize(parts.map((p) => p.data).join(''))) as WordToken[];
+    if (!hit.node.isConnected) return retries > 0 ? selectWordAt(doc, x, y, retries - 1) : undefined;
     const word = wordAt(tokens, offset);
     const texts = parts.map((p) => p.data);
     const range = word && toDomRange(texts, word.start, word.end);
@@ -75,6 +81,11 @@ async function selectWordAt(doc: Document, hit: { node: Text; index: number }): 
  * `onAnnotation` says whether a point is on a highlight: those keep their own click (the colour menu).
  */
 export function installWordSelect(doc: Document, onAnnotation: (e: MouseEvent) => boolean): void {
+  // Warm the tokenizer once a section really holds Japanese, so the first click does not wait for its dictionary to download.
+  // Delayed a little so it never competes with the first render; English-only books never get here.
+  const text = doc.body?.textContent ?? '';
+  if (HAS_KANJI.test(text) || HAS_KANA.test(text))
+    setTimeout(() => void import('../lookup/ja').then((m) => m.preloadJapanese()).catch(() => {}), 1500);
   doc.addEventListener(
     'click',
     (e) => {
@@ -85,7 +96,7 @@ export function installWordSelect(doc: Document, onAnnotation: (e: MouseEvent) =
       if (!hit) return;
       // A tap on text is a text tap, not a tap on the empty page: the reader must not toggle its toolbars for it.
       if ((e as PointerEvent).pointerType !== 'mouse') e.stopPropagation();
-      void selectWordAt(doc, hit);
+      void selectWordAt(doc, e.clientX, e.clientY);
     },
     true,
   );

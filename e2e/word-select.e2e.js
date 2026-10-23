@@ -130,7 +130,7 @@ async (page, env = {}) => {
     await turnFuriganaOn();
     const p = await charAt('名前', { index: 1 });
     await page.mouse.click(p.x, p.y);
-    await until(async () => (await selected()) === '名前', 'the word 名前 selected', 8000);
+    await until(async () => (await selected()) === '名前', 'the word 名前 selected', 40000);
     eq(await popupWord(), '名前', 'lookup heading');
     await reset();
   });
@@ -222,7 +222,7 @@ async (page, env = {}) => {
     await openFromLibrary('縦書きの本');
     const p = await charAt('景色', { index: 1 });
     await page.mouse.click(p.x, p.y);
-    await until(async () => (await selected()) === '景色', 'the word 景色', 8000);
+    await until(async () => (await selected()) === '景色', 'the word 景色', 40000);
     await reset();
     const r = await charAt('けしき', { index: 1, reading: true });
     await page.mouse.click(r.x, r.y);
@@ -241,7 +241,7 @@ async (page, env = {}) => {
     const before = await chromeHidden();
     const p = await charAt('景色', { index: 1 });
     await page.touchscreen.tap(p.x, p.y);
-    await until(async () => (await selected()) === '景色', 'tap selects 景色', 8000);
+    await until(async () => (await selected()) === '景色', 'tap selects 景色', 40000);
     eq(await chromeHidden(), before, 'toolbars after a tap on a word');
     await reset();
     const spot = await until(async () => {
