@@ -286,6 +286,8 @@ async (page, env = {}) => {
     await untilSelected('景色', 'tap selects 景色', 40000, p);
     eq(await chromeHidden(), before, 'toolbars after a tap on a word');
     await reset();
+    await page.waitForTimeout(1000); // let anything still in flight from the word tap land before the blank tap
+    eq(await selected(), '', 'selection before the blank tap (anything here comes from earlier, not from the tap)');
     const spot = await until(async () => {
       const vp = page.viewportSize();
       for (const f of frames()) {
