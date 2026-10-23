@@ -530,6 +530,159 @@ async (page, ctx = {}) => {
     ok((await page.getByRole('button', { name: /^Open series/ }).count()) === 0, 'the empty series is still listed');
   });
 
+  // ---- add a whole folder: its name becomes the series, the formats are chosen in a dialog ----
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'sr-folder-'));
+  // A store-only zip with two real-looking pages: the reader needs a cbz with pages, and no fixture is a second valid one.
+  const crcTable = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+  const crc32 = (buf) => { let c = 0xffffffff; for (const b of buf) c = crcTable[(c ^ b) & 0xff] ^ (c >>> 8); return (c ^ 0xffffffff) >>> 0; };
+  function storeZip(entries) {
+    const parts = []; const central = []; let offset = 0;
+    for (const [name, data] of entries) {
+      const nameBuf = Buffer.from(name); const crc = crc32(data);
+      const local = Buffer.alloc(30);
+      local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt32LE(crc, 14);
+      local.writeUInt32LE(data.length, 18); local.writeUInt32LE(data.length, 22); local.writeUInt16LE(nameBuf.length, 26);
+      parts.push(local, nameBuf, data);
+      const cd = Buffer.alloc(46);
+      cd.writeUInt32LE(0x02014b50, 0); cd.writeUInt16LE(20, 4); cd.writeUInt16LE(20, 6); cd.writeUInt32LE(crc, 16);
+      cd.writeUInt32LE(data.length, 20); cd.writeUInt32LE(data.length, 24); cd.writeUInt16LE(nameBuf.length, 28); cd.writeUInt32LE(offset, 42);
+      central.push(cd, nameBuf);
+      offset += 30 + nameBuf.length + data.length;
+    }
+    const cdBuf = Buffer.concat(central);
+    const eocd = Buffer.alloc(22);
+    eocd.writeUInt32LE(0x06054b50, 0); eocd.writeUInt16LE(entries.length, 8); eocd.writeUInt16LE(entries.length, 10);
+    eocd.writeUInt32LE(cdBuf.length, 12); eocd.writeUInt32LE(offset, 16);
+    return Buffer.concat([...parts, cdBuf, eocd]);
+  }
+  // "Mi Serie": two EPUB, one PDF, one CBZ at the top, one more CBZ in a subfolder, and a notes.txt that must be ignored.
+  const MI = path.join(TMP, 'Mi Serie');
+  fs.mkdirSync(path.join(MI, 'extra'), { recursive: true });
+  for (const name of ['book-en.epub', 'book-ja.epub', 'sample.pdf', 'manga.cbz']) fs.copyFileSync(FIX + name, path.join(MI, name));
+  fs.writeFileSync(path.join(MI, 'notes.txt'), 'not a book');
+  fs.writeFileSync(path.join(MI, 'extra', 'Vol 9.cbz'), storeZip([['1.png', Buffer.from('page one')], ['2.png', Buffer.from('page two')]]));
+  const SOLO = path.join(TMP, 'Solo Notas');
+  fs.mkdirSync(SOLO);
+  fs.writeFileSync(path.join(SOLO, 'notes.txt'), 'nothing to import');
+
+  // The folder input is made on click, so a plain `input[type=file]` selector still means the book picker.
+  async function pickFolder(folder) {
+    const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Add folder' }).click()]);
+    await chooser.setFiles(folder);
+  }
+  const folderDialog = () => page.getByRole('dialog', { name: /^Add folder/ });
+  const dialogOpen = () => page.locator('dialog[open]').count();
+  const addInDialog = () => folderDialog().getByRole('button', { name: 'Add', exact: true });
+
+  await step('add folder: the dialog is named after the folder, the name is prefilled, counts per format', async () => {
+    await resetApp();
+    await pickFolder(MI);
+    await folderDialog().waitFor();
+    ok((await page.getByRole('dialog', { name: 'Add folder "Mi Serie"' }).count()) === 1, 'dialog title is not "Add folder \\"Mi Serie\\""');
+    ok((await page.getByLabel('Series name').inputValue()) === 'Mi Serie', 'series name not prefilled');
+    ok((await page.getByLabel('EPUB (2)').isChecked()) && (await page.getByLabel('PDF (1)').isChecked()) && (await page.getByLabel('CBZ (2)').isChecked()), 'formats with books are not checked');
+    ok((await folderDialog().getByText('5 books will be added to "Mi Serie"').count()) === 1, 'summary line wrong');
+    await page.keyboard.press('Escape');
+    await until(async () => (await dialogOpen()) === 0, 'dialog to close');
+  });
+
+  await step('add folder: all supported books go into one series card named after the folder; notes.txt is ignored', async () => {
+    await resetApp();
+    await pickFolder(MI);
+    await folderDialog().waitFor();
+    await addInDialog().click();
+    await until(async () => (await page.getByRole('button', { name: 'Open series Mi Serie, 5 volumes' }).count()) === 1, 'series card for the folder');
+    ok((await dialogOpen()) === 0, 'dialog stays open after adding');
+    ok((await page.locator('.card').count()) === 1, 'expected one card, got ' + (await page.locator('.card').count()));
+    ok((await text('.lib-count')).trim() === '5 books', 'count: ' + (await text('.lib-count')));
+    await page.getByRole('button', { name: 'Open series Mi Serie, 5 volumes' }).click();
+    ok((await page.locator('.card').count()) === 5, 'expected 5 volumes inside the series');
+    ok((await page.locator('.card-title', { hasText: 'notes' }).count()) === 0, 'notes.txt was imported');
+    await page.getByRole('button', { name: 'Back to library' }).click();
+  });
+
+  await step('add folder: unchecking EPUB and PDF adds only the CBZ files; no format checked disables Add', async () => {
+    await resetApp();
+    await pickFolder(MI);
+    await folderDialog().waitFor();
+    await page.getByLabel('EPUB (2)').uncheck();
+    await page.getByLabel('PDF (1)').uncheck();
+    ok((await folderDialog().getByText('2 books will be added to "Mi Serie"').count()) === 1, 'summary after unchecking');
+    await page.getByLabel('CBZ (2)').uncheck();
+    ok((await folderDialog().getByText('Choose at least one format').count()) === 1, 'no hint without a format');
+    ok(await addInDialog().isDisabled(), 'Add enabled without a format');
+    await page.getByLabel('CBZ (2)').check();
+    await addInDialog().click();
+    await until(async () => (await page.getByRole('button', { name: 'Open series Mi Serie, 2 volumes' }).count()) === 1, 'the two CBZ volumes');
+    ok((await text('.lib-count')).trim() === '2 books', 'count: ' + (await text('.lib-count')));
+  });
+
+  await step('add folder: editing the series name uses the new name', async () => {
+    await resetApp();
+    await pickFolder(MI);
+    await folderDialog().waitFor();
+    await page.getByLabel('Series name').fill('Ao no Hako');
+    ok((await folderDialog().getByText('5 books will be added to "Ao no Hako"').count()) === 1, 'summary does not follow the name');
+    await addInDialog().click();
+    await until(async () => (await page.getByRole('button', { name: 'Open series Ao no Hako, 5 volumes' }).count()) === 1, 'series named Ao no Hako');
+    ok((await page.getByRole('button', { name: /^Open series Mi Serie/ }).count()) === 0, 'the folder name was used anyway');
+  });
+
+  await step('add folder: a folder with no supported files shows the error toast and no dialog', async () => {
+    await resetApp();
+    await pickFolder(SOLO);
+    await until(async () => /No EPUB, PDF or CBZ files in that folder\./.test(await toastText()), 'no-books toast');
+    ok((await dialogOpen()) === 0, 'dialog opened for a folder with no books');
+    ok((await page.locator('.card').count()) === 0, 'something was added');
+  });
+
+  await step('add folder: books already in the library as loose books move into the series without duplicates', async () => {
+    await resetApp();
+    await seedBooks([['book-en.epub'], ['book-ja.epub'], ['sample.pdf']]);
+    await until(async () => (await page.locator('.card').count()) === 3, 'three loose books listed first');
+    await pickFolder(MI);
+    await folderDialog().waitFor();
+    await addInDialog().click();
+    await until(async () => (await page.getByRole('button', { name: 'Open series Mi Serie, 5 volumes' }).count()) === 1, 'the series with five volumes');
+    ok((await page.locator('.card').count()) === 1, 'loose books left behind: ' + (await page.locator('.card').count()));
+    ok((await text('.lib-count')).trim() === '5 books', 'duplicates: ' + (await text('.lib-count')));
+  });
+
+  await step('add folder: Esc closes the dialog without importing, focus returns to Add folder', async () => {
+    await resetApp();
+    await pickFolder(MI);
+    await folderDialog().waitFor();
+    await page.keyboard.press('Escape');
+    await until(async () => (await dialogOpen()) === 0, 'dialog to close');
+    ok((await page.locator('.card').count()) === 0, 'Esc imported books');
+    ok((await page.evaluate(() => document.activeElement?.textContent?.trim())) === 'Add folder', 'focus not back on Add folder');
+  });
+
+  await step('add folder: at 360px the dialog fits, no sideways scroll, controls reachable by keyboard with 44px targets', async () => {
+    await resetApp();
+    await page.setViewportSize({ width: 360, height: 740 });
+    await sleep(200);
+    await pickFolder(MI);
+    await folderDialog().waitFor();
+    await sleep(300);
+    ok((await overflowX()) <= 0, 'page scrolls horizontally with the dialog open');
+    const box = await folderDialog().boundingBox();
+    ok(box.x >= 0 && box.x + box.width <= 360, 'dialog is wider than the phone: ' + JSON.stringify(box));
+    const focused = () => page.evaluate(() => { const el = document.activeElement; return el?.labels?.[0]?.textContent?.trim() || el?.getAttribute('aria-label') || el?.textContent?.trim(); });
+    const order = [await focused()];
+    for (let i = 0; i < 6; i++) { await page.keyboard.press('Tab'); order.push(await focused()); }
+    for (const name of ['EPUB (2)', 'PDF (1)', 'CBZ (2)', 'Cancel', 'Add']) ok(order.includes(name), `${name} not reachable with Tab: ${order.join(' > ')}`);
+    const small = await page.evaluate(() => [...document.querySelectorAll('dialog[open] button, dialog[open] .folder-format')].filter((b) => b.getBoundingClientRect().height < 43.5).map((b) => b.className + ':' + b.textContent.trim()));
+    ok(small.length === 0, 'small targets in the dialog: ' + small.join(', '));
+    await page.keyboard.press('Escape');
+    await page.setViewportSize({ width: 1280, height: 800 });
+  });
+
+  fs.rmSync(TMP, { recursive: true, force: true });
+
   const failed = results.filter((r) => !r.ok);
   return { passed: results.length - failed.length, failed: failed.length, results };
 }
