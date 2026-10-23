@@ -1,3 +1,5 @@
+
+
 // Real-browser tests: the Storage contract on OPFS, the library on OPFS, and openBook with real EPUB/PDF files.
 //   node src/reader/e2e/run.mjs
 // Needs the `playwright` devDependency (PLAYWRIGHT_DIR or the npx cache are fallbacks).
@@ -284,10 +286,29 @@ await test('epub: single-page layout shows one page where auto shows two side by
   await ev(() => { document.getElementById('host').style.width = '1500px'; });
   await open('book-en.epub');
   const twoUp = (await nav('next')).fraction;
+  // A column is "side by side" when its text starts in the right half of the host. Measured on the page on screen,
+  // because one page of a single column now spans the whole window, so it can hold as much text as a spread.
+  const secondColumnShown = () => ev(() => {
+    const host = document.getElementById('host').getBoundingClientRect();
+    const doc = session.docs[0];
+    const frame = doc.defaultView.frameElement.getBoundingClientRect();
+    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (!n.textContent.trim()) continue;
+      const range = doc.createRange();
+      range.selectNodeContents(n);
+      for (const q of range.getClientRects()) {
+        const left = frame.left + q.left;
+        if (q.width > 0 && left > host.left + host.width / 2 && frame.left + q.right <= host.right + 1) return true;
+      }
+    }
+    return false;
+  });
+  await ev(() => session.handle.goToFraction(0));
+  assert.ok(await secondColumnShown(), 'auto shows a second column side by side');
   await ev((s) => session.handle.setSettings(s), THEME('light', 100, 'single'));
   await ev(() => session.handle.goToFraction(0));
-  const one = (await nav('next')).fraction;
-  assert.ok(one < twoUp, `a single page covers less of the book than a spread (${one} vs ${twoUp})`);
+  assert.ok(!(await secondColumnShown()), 'one page: the text stays in one column');
   await ev((s) => session.handle.setSettings(s), THEME('light', 100, 'auto'));
   await ev(() => session.handle.goToFraction(0));
   assert.ok(Math.abs((await nav('next')).fraction - twoUp) < 1e-6, 'back to auto restores the spread');
@@ -976,7 +997,44 @@ await test('pdf and cbz: rtl() is false for a pdf and follows the setting for a 
   assert.equal(await rtlNow(), false);
 });
 
-// Opt-in: COMIC_RAR=/path/to/real.cbr runs against a real comic (never committed). The file goes in through the page's file input.
+// ---- A heading that hangs out of the column with a negative text-indent (vertical-text design) ----------------
+const hangProbe = () =>
+  ev(() => {
+    const d = session.docs.at(-1);
+    const h = d.querySelector('h1');
+    const p = d.querySelector('p');
+    const r = d.createRange();
+    r.setStart(h.firstChild, 0);
+    r.setEnd(h.firstChild, 1);
+    return {
+      h1Indent: parseFloat(getComputedStyle(h).textIndent),
+      pIndent: parseFloat(getComputedStyle(p).textIndent),
+      firstLeft: r.getBoundingClientRect().left,
+      h1Left: h.getBoundingClientRect().left,
+    };
+  });
+
+await test('hanging heading: in book mode the negative indent of the book is left alone', async () => {
+  await open('book-ja-hanging.epub', { settings: WRITING('book') });
+  const m = await hangProbe();
+  assert.ok(m.h1Indent < 0, `the book's own text-indent stays negative, got ${m.h1Indent}`);
+});
+
+await test('hanging heading: in horizontal mode the first character stays inside the column and normal indents survive', async () => {
+  await open('book-ja-hanging.epub', { settings: WRITING('horizontal') });
+  const m = await hangProbe();
+  assert.equal(m.h1Indent, 0, 'the negative indent is removed');
+  assert.ok(m.pIndent > 0, `a normal first-line indent is kept, got ${m.pIndent}`);
+  assert.ok(m.firstLeft >= m.h1Left - 0.5, `the first character (${m.firstLeft}) is not left of its block (${m.h1Left})`);
+});
+
+await test('hanging heading: switching book -> horizontal live removes the hang, and back restores it', async () => {
+  await open('book-ja-hanging.epub', { settings: WRITING('book') });
+  await setWriting('horizontal');
+  assert.equal((await hangProbe()).h1Indent, 0);
+  await setWriting('book');
+  assert.ok((await hangProbe()).h1Indent < 0, 'the own indent of the book is back');
+});// Opt-in: COMIC_RAR=/path/to/real.cbr runs against a real comic (never committed). The file goes in through the page's file input.
 if (process.env.COMIC_RAR) {
   await test('cbr real file (COMIC_RAR): page 1 renders, next works, and the page count is reported', async () => {
     await page.setInputFiles('#pick', process.env.COMIC_RAR);

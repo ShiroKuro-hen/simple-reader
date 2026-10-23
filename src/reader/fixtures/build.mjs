@@ -275,4 +275,28 @@ out(
   }),
 );
 
+// ---- Vertical Japanese EPUB whose chapter heading hangs out of the column ------------------------------------
+// Like the Kusuriya novels: `text-indent: -3em; padding: 3em 0 0` is a hanging indent in vertical text. In horizontal
+// text the negative indent pushes the first characters outside the column, where foliate clips them.
+out(
+  'book-ja-hanging.epub',
+  await epub({
+    id: 'urn:uuid:44444444-4444-4444-4444-444444444444',
+    title: '吊り下げの本',
+    author: '山田花子',
+    lang: 'ja',
+    cover: null,
+    css: 'html, body { writing-mode: vertical-rl; }\nh1 { text-indent: -3em; padding: 3em 0 0; margin: 3em 0 0; }\np { margin: 0 0 0.6em; text-indent: 1em; }',
+    progression: 'rtl',
+    chapters: [
+      {
+        title: '一話　猫猫',
+        paragraphs: Array.from({ length: 12 }, (_, i) => ({
+          html: `${i + 1}つ目の${ruby('景色', 'けしき')}。${ruby('窓', 'まど')}の外では${ruby('雨', 'あめ')}が降り続いていた。`,
+        })),
+      },
+    ],
+  }),
+);
+
 console.log('fixtures written to', here);
