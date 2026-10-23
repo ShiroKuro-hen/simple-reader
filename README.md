@@ -24,7 +24,7 @@ Most readers either do a lot and get in the way, or do little and send your libr
 
 ## Features
 
-- **EPUB, PDF and CBZ comics** in one reader (EPUB rendered with foliate-js, PDF with PDF.js, CBZ as decoded page images). Comics read right to left by default, in one or two pages, with zoom.
+- **EPUB, PDF and CBZ/CBR comics** in one reader (EPUB rendered with foliate-js, PDF with PDF.js, comics as decoded page images; the ZIP or RAR container is detected from the file's bytes, and the RAR decoder loads only when a RAR is opened). Comics read right to left by default, in one or two pages, with zoom.
 - **Update notice** in the Windows and Android apps when a newer release exists on GitHub (the web app updates itself).
 - **Clean paginated reading** with light, dark and sepia themes, adjustable font size, and a choice of one page or two pages side by side on wide windows.
 - **Select any word to look it up:** definition and Spanish translation in a popup.
@@ -106,7 +106,7 @@ Taken from [PLAN.md](PLAN.md) (written in Spanish). Checked means it exists toda
 - [x] Word lookup with Spanish translation, Japanese reading, romaji and furigana
 - [x] Optional R2 backup and sync
 - [x] Library search, tags and sorting
-- [x] Manga (CBZ): right-to-left, double page, zoom, page preloading
+- [x] Manga (CBZ and CBR): right-to-left, double page, zoom, page preloading
 - [ ] Manga: image folders, vertical (webtoon) scroll
 - [ ] Right-to-left and vertical EPUB, in-book search
 - [x] Highlights, notes and bookmarks in EPUB (PDF: bookmarks only; PDF highlights pending)

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fixtureFile } from '../reader/fixtures/load';
+import { storeRar5 } from '../reader/fixtures/store-rar';
 import { storeZip } from '../reader/fixtures/store-zip';
 import { readCbzInfo } from './cbz-info';
 
@@ -38,8 +39,27 @@ describe('readCbzInfo', () => {
     expect(types).toEqual(['image/gif', 'image/jpeg', 'image/avif']);
   });
 
+  it('reads a RAR (.cbr) comic the same way: pages, cover and MIME type', async () => {
+    const rar = new Blob([storeRar5({ 'ch/10.jpg': bytes('ten'), 'ch/2.jpg': bytes('two'), 'ch/readme.txt': bytes('hi') })]);
+    const info = await readCbzInfo(rar);
+    expect(info.pages).toBe(2);
+    expect(await info.cover!.text()).toBe('two');
+    expect(info.cover!.type).toBe('image/jpeg');
+  });
+
+  it('decides the container from the bytes, not the file name', async () => {
+    const zipNamedCbr = new File([storeZip({ '1.png': bytes('zip page') })], 'Vol 1.cbr');
+    expect((await readCbzInfo(zipNamedCbr)).pages).toBe(1);
+    const rarNamedCbz = new File([storeRar5({ '1.png': bytes('rar page') })], 'Vol 2.cbz');
+    expect(await (await readCbzInfo(rarNamedCbz)).cover!.text()).toBe('rar page');
+  });
+
   it('rejects a zip with no images', async () => {
     await expect(readCbzInfo(comic({ 'readme.txt': 'nothing to see' }))).rejects.toThrow(/no pages/);
+  });
+
+  it('rejects a rar with no images', async () => {
+    await expect(readCbzInfo(new Blob([storeRar5({ 'readme.txt': bytes('nothing to see') })]))).rejects.toThrow(/no pages/);
   });
 
   it('rejects bytes that are not a zip, an empty file, and a PDF', async () => {

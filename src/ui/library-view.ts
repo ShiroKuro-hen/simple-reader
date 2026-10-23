@@ -14,9 +14,9 @@ import { createSettings, type App } from './settings';
 
 type SeriesEntry = Extract<Entry, { kind: 'series' }>;
 
-const FORMAT_NAMES: Record<BookFormat, string> = { epub: 'EPUB', pdf: 'PDF', cbz: 'CBZ' };
+const FORMAT_NAMES: Record<BookFormat, string> = { epub: 'EPUB', pdf: 'PDF', cbz: 'Comics (CBZ/CBR)' };
 
-const isBook = (f: File) => /\.(epub|pdf|cbz)$/i.test(f.name) || /^application\/(epub\+zip|pdf|vnd\.comicbook\+zip|x-cbz)$/.test(f.type);
+const isBook = (f: File) => /\.(epub|pdf|cbz|cbr)$/i.test(f.name) || /^application\/(epub\+zip|pdf|vnd\.comicbook\+zip|vnd\.comicbook-rar|x-cbz|x-cbr)$/.test(f.type);
 
 const SORT_KEY = 'sr.sort';
 const SORT_LABELS: Record<SortKey, string> = { added: 'Recently added', title: 'Title', author: 'Author', read: 'Recently read' };
@@ -49,7 +49,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   let openSeries: string | null = null;
 
   const input = h('input', {
-    type: 'file', accept: '.epub,.pdf,.cbz,application/epub+zip,application/pdf,application/vnd.comicbook+zip', multiple: true, hidden: true,
+    type: 'file', accept: '.epub,.pdf,.cbz,.cbr,application/epub+zip,application/pdf,application/vnd.comicbook+zip,application/vnd.comicbook-rar,application/x-cbr', multiple: true, hidden: true,
     onchange: () => {
       void addFiles([...(input.files ?? [])]);
       input.value = ''; // lets the same file be picked again
@@ -133,7 +133,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
 
   async function addFiles(files: File[]) {
     const ok = files.filter(isBook);
-    if (files.length > ok.length) toast(ok.length ? `Skipped ${files.length - ok.length} unsupported file(s).` : 'Only EPUB, PDF and CBZ files are supported.', 'error');
+    if (files.length > ok.length) toast(ok.length ? `Skipped ${files.length - ok.length} unsupported file(s).` : 'Only EPUB, PDF, CBZ and CBR files are supported.', 'error');
     if (!ok.length) return;
     const added = await addBooks(ok);
     if (added) toast(`Added ${added} book${added === 1 ? '' : 's'}`);
@@ -148,7 +148,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
         picker.remove();
         const plan = planFolderImport(files.map((f) => f.webkitRelativePath));
         if (!plan.books.length) {
-          toast('No EPUB, PDF or CBZ files in that folder.', 'error');
+          toast('No EPUB, PDF, CBZ or CBR files in that folder.', 'error');
           return;
         }
         openFolderDialog(files, plan);

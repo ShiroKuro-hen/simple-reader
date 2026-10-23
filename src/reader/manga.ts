@@ -1,11 +1,11 @@
-// Comic archives (.cbz): a zip of page images, shown one spread at a time. Pages are decoded from the zip
+// Comic archives (.cbz zip, .cbr rar) of page images, shown one spread at a time. Pages are decoded from the zip
 // only while they are near the current spread, so a long book never sits fully decoded in memory.
-import { IMAGE_TYPE } from '../storage/cbz-info';
-import { BlobReader, BlobWriter, ZipReader, configure } from '../vendor/foliate-js/vendor/zip.js';
 import type { OpenBookOptions, ReaderHandle, ReaderSettings } from '../types';
+import { openComicArchive } from './comic-archive';
 import { displayOrder, pagesToKeep, sortPageNames, spreadOf, stepPage } from './manga-nav';
 import { fractionOfPage, pageFromFraction, parsePage } from './pdf-nav';
 import { replayable } from './selection';
+import { loadUnrarWasm } from './rar-wasm';
 import { THEMES } from './theme';
 
 /** 'auto' shows two pages side by side once the window is at least this many times wider than tall. */
@@ -15,17 +15,11 @@ const AHEAD = 3;
 const BEHIND = 1;
 
 export async function openCbz(blob: Blob, container: HTMLElement, opts: OpenBookOptions): Promise<ReaderHandle> {
-  configure({ useWebWorkers: false });
-  const reader = new ZipReader(new BlobReader(blob));
-  let entries: Map<string, any>;
-  let names: string[];
-  try {
-    entries = new Map((await reader.getEntries()).map((e: any) => [e.filename as string, e]));
-    names = sortPageNames([...entries.keys()]);
-    if (names.length === 0) throw new Error('no pages: the archive holds no images');
-  } catch (err) {
-    await reader.close().catch(() => {});
-    throw err;
+  const archive = await openComicArchive(blob, { wasm: loadUnrarWasm });
+  const names = sortPageNames(archive.names);
+  if (names.length === 0) {
+    await archive.close();
+    throw new Error('no pages: the archive holds no images');
   }
   const total = names.length;
 
@@ -48,10 +42,7 @@ export async function openCbz(blob: Blob, container: HTMLElement, opts: OpenBook
   const wantsDouble = () =>
     settings.layout === 'auto' && root.clientHeight > 0 && root.clientWidth >= SPREAD_RATIO * root.clientHeight;
 
-  const loadPage = (p: number) => {
-    const name = names[p - 1]!;
-    return entries.get(name)!.getData(new BlobWriter(IMAGE_TYPE[name.split('.').pop()!.toLowerCase()]));
-  };
+  const loadPage = (p: number) => archive.read(names[p - 1]!);
 
   async function render() {
     if (destroyed) return;
@@ -127,7 +118,7 @@ export async function openCbz(blob: Blob, container: HTMLElement, opts: OpenBook
     urls.clear();
     relocates.clear();
     root.remove();
-    void reader.close();
+    void archive.close();
   }
 
   try {

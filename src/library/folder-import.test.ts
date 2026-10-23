@@ -16,6 +16,13 @@ describe('planFolderImport', () => {
     ]);
   });
 
+  it('counts a .cbr comic as a cbz book: a folder with a.cbr and b.cbz has 2 comics', () => {
+    const plan = planFolderImport(['S/a.cbr', 'S/b.cbz']);
+    expect(plan.counts).toEqual({ epub: 0, pdf: 0, cbz: 2 });
+    expect(plan.books.map((b) => b.format)).toEqual(['cbz', 'cbz']);
+    expect(paths(plan)).toEqual(['S/a.cbr', 'S/b.cbz']);
+  });
+
   it('orders books naturally and case-insensitively on the full path: Vol 2 before Vol 10', () => {
     const plan = planFolderImport(['S/Vol 10.epub', 'S/Vol 2.epub', 'S/vol 1.epub']);
     expect(paths(plan)).toEqual(['S/vol 1.epub', 'S/Vol 2.epub', 'S/Vol 10.epub']);

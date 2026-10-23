@@ -1,6 +1,7 @@
-// Page count and cover of a comic archive (.cbz is a zip of page images), read straight from its zip.
+// Page count and cover of a comic archive (.cbz is a zip, .cbr a rar, both of page images), read from its container.
+import { openComicArchive } from '../reader/comic-archive';
 import { sortPageNames } from '../reader/manga-nav';
-import { BlobReader, BlobWriter, ZipReader, configure } from '../vendor/foliate-js/vendor/zip.js';
+import { loadUnrarWasm } from '../reader/rar-wasm';
 
 export interface CbzInfo {
   cover?: Blob;
@@ -16,19 +17,14 @@ export const IMAGE_TYPE: Record<string, string> = {
   avif: 'image/avif',
 };
 
-/** Throws if `blob` is not a zip, or holds no page images. */
+/** Throws if `blob` is not a zip or rar, or holds no page images. */
 export async function readCbzInfo(blob: Blob): Promise<CbzInfo> {
-  configure({ useWebWorkers: false });
-  const reader = new ZipReader(new BlobReader(blob));
+  const archive = await openComicArchive(blob, { wasm: loadUnrarWasm });
   try {
-    const entries = new Map((await reader.getEntries()).map((e: any) => [e.filename as string, e]));
-    const pages = sortPageNames([...entries.keys()]);
+    const pages = sortPageNames(archive.names);
     if (pages.length === 0) throw new Error('no pages: the archive holds no images');
-    const first = pages[0]!;
-    const ext = first.split('.').pop()!.toLowerCase();
-    const cover = await entries.get(first)!.getData(new BlobWriter(IMAGE_TYPE[ext]));
-    return { cover, pages: pages.length };
+    return { cover: await archive.read(pages[0]!), pages: pages.length };
   } finally {
-    await reader.close();
+    await archive.close();
   }
 }

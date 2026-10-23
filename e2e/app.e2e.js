@@ -161,7 +161,7 @@ async (page, ctx = {}) => {
 
   await step('unsupported file type -> friendly toast', async () => {
     await page.setInputFiles('input[type=file]', [{ name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') }]);
-    await until(async () => /Only EPUB, PDF and CBZ/.test(await toastText()), 'unsupported toast');
+    await until(async () => /Only EPUB, PDF, CBZ and CBR/.test(await toastText()), 'unsupported toast');
   });
 
   await step('add by drag & drop (and the overlay appears while dragging)', async () => {
@@ -583,7 +583,7 @@ async (page, ctx = {}) => {
     await folderDialog().waitFor();
     ok((await page.getByRole('dialog', { name: 'Add folder "Mi Serie"' }).count()) === 1, 'dialog title is not "Add folder \\"Mi Serie\\""');
     ok((await page.getByLabel('Series name').inputValue()) === 'Mi Serie', 'series name not prefilled');
-    ok((await page.getByLabel('EPUB (2)').isChecked()) && (await page.getByLabel('PDF (1)').isChecked()) && (await page.getByLabel('CBZ (2)').isChecked()), 'formats with books are not checked');
+    ok((await page.getByLabel('EPUB (2)').isChecked()) && (await page.getByLabel('PDF (1)').isChecked()) && (await page.getByLabel('Comics (CBZ/CBR) (2)').isChecked()), 'formats with books are not checked');
     ok((await folderDialog().getByText('5 books will be added to "Mi Serie"').count()) === 1, 'summary line wrong');
     await page.keyboard.press('Escape');
     await until(async () => (await dialogOpen()) === 0, 'dialog to close');
@@ -611,10 +611,10 @@ async (page, ctx = {}) => {
     await page.getByLabel('EPUB (2)').uncheck();
     await page.getByLabel('PDF (1)').uncheck();
     ok((await folderDialog().getByText('2 books will be added to "Mi Serie"').count()) === 1, 'summary after unchecking');
-    await page.getByLabel('CBZ (2)').uncheck();
+    await page.getByLabel('Comics (CBZ/CBR) (2)').uncheck();
     ok((await folderDialog().getByText('Choose at least one format').count()) === 1, 'no hint without a format');
     ok(await addInDialog().isDisabled(), 'Add enabled without a format');
-    await page.getByLabel('CBZ (2)').check();
+    await page.getByLabel('Comics (CBZ/CBR) (2)').check();
     await addInDialog().click();
     await until(async () => (await page.getByRole('button', { name: 'Open series Mi Serie, 2 volumes' }).count()) === 1, 'the two CBZ volumes');
     ok((await text('.lib-count')).trim() === '2 books', 'count: ' + (await text('.lib-count')));
@@ -634,7 +634,7 @@ async (page, ctx = {}) => {
   await step('add folder: a folder with no supported files shows the error toast and no dialog', async () => {
     await resetApp();
     await pickFolder(SOLO);
-    await until(async () => /No EPUB, PDF or CBZ files in that folder\./.test(await toastText()), 'no-books toast');
+    await until(async () => /No EPUB, PDF, CBZ or CBR files in that folder\./.test(await toastText()), 'no-books toast');
     ok((await dialogOpen()) === 0, 'dialog opened for a folder with no books');
     ok((await page.locator('.card').count()) === 0, 'something was added');
   });
@@ -674,11 +674,52 @@ async (page, ctx = {}) => {
     const focused = () => page.evaluate(() => { const el = document.activeElement; return el?.labels?.[0]?.textContent?.trim() || el?.getAttribute('aria-label') || el?.textContent?.trim(); });
     const order = [await focused()];
     for (let i = 0; i < 6; i++) { await page.keyboard.press('Tab'); order.push(await focused()); }
-    for (const name of ['EPUB (2)', 'PDF (1)', 'CBZ (2)', 'Cancel', 'Add']) ok(order.includes(name), `${name} not reachable with Tab: ${order.join(' > ')}`);
+    for (const name of ['EPUB (2)', 'PDF (1)', 'Comics (CBZ/CBR) (2)', 'Cancel', 'Add']) ok(order.includes(name), `${name} not reachable with Tab: ${order.join(' > ')}`);
     const small = await page.evaluate(() => [...document.querySelectorAll('dialog[open] button, dialog[open] .folder-format')].filter((b) => b.getBoundingClientRect().height < 43.5).map((b) => b.className + ':' + b.textContent.trim()));
     ok(small.length === 0, 'small targets in the dialog: ' + small.join(', '));
     await page.keyboard.press('Escape');
     await page.setViewportSize({ width: 1280, height: 800 });
+  });
+
+  // ---- comics in RAR (.cbr): built in the page from the manga.cbz pages, written to disk like a user's file ----
+  async function writeRar(file) {
+    const bytes = await page.evaluate(async (url) => {
+      const { openComicArchive } = await import('/src/reader/comic-archive.ts');
+      const { storeRar5 } = await import('/src/reader/fixtures/store-rar.ts');
+      const archive = await openComicArchive(await (await fetch(url)).blob());
+      const files = {};
+      for (const n of archive.names) files[n] = new Uint8Array(await (await archive.read(n)).arrayBuffer());
+      await archive.close();
+      return [...storeRar5(files)];
+    }, '/src/reader/fixtures/manga.cbz');
+    fs.writeFileSync(file, Buffer.from(bytes));
+  }
+
+  await step('add books: a .cbr (RAR) gets a cover and opens in the reader', async () => {
+    await resetApp();
+    const cbr = path.join(TMP, 'Rar Vol 1.cbr');
+    await writeRar(cbr);
+    await page.setInputFiles('input[type=file]', cbr);
+    await until(async () => (await page.locator('.card').count()) === 1, 'the .cbr card');
+    await until(async () => (await page.locator('.cover img').count()) === 1, 'a cover for the .cbr');
+    ok(await page.locator('.cover img').first().evaluate((img) => img.complete && img.naturalWidth > 0), 'the cover is not a decoded picture');
+    await openFromLibrary('Rar Vol 1');
+    ok(await page.locator('.sr-manga img').first().evaluate((img) => img.naturalWidth > 0), 'page 1 of the .cbr did not decode');
+    await backToLibrary();
+  });
+
+  await step('add folder: one .cbr and one .cbz are two comics, counted as Comics (CBZ/CBR) (2)', async () => {
+    await resetApp();
+    const DUO = path.join(TMP, 'Duo Comics');
+    fs.mkdirSync(DUO);
+    await writeRar(path.join(DUO, 'Duo A.cbr'));
+    fs.copyFileSync(FIX + 'manga.cbz', path.join(DUO, 'Duo B.cbz'));
+    await pickFolder(DUO);
+    await folderDialog().waitFor();
+    ok((await page.getByLabel('Comics (CBZ/CBR) (2)').count()) === 1, 'the comics format is not counted as 2');
+    ok(await page.getByLabel('Comics (CBZ/CBR) (2)').isChecked(), 'the comics format is not checked');
+    await addInDialog().click();
+    await until(async () => (await page.getByRole('button', { name: 'Open series Duo Comics, 2 volumes' }).count()) === 1, 'the comics series');
   });
 
   fs.rmSync(TMP, { recursive: true, force: true });

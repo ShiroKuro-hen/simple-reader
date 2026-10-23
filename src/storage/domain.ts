@@ -11,6 +11,8 @@ export async function sha256Hex(data: ArrayBuffer | Uint8Array): Promise<string>
 
 export function formatOf(filename: string): BookFormat | null {
   const ext = filename.includes('.') ? filename.split('.').pop()!.toLowerCase() : '';
+  // A .cbr is one more name for a cbz book: the real container (zip or rar) is told apart from the bytes, not the name.
+  if (ext === 'cbr') return 'cbz';
   return ext === 'epub' || ext === 'pdf' || ext === 'cbz' ? ext : null;
 }
 

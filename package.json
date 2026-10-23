@@ -27,6 +27,7 @@
     "aws4fetch": "^1.0.20",
     "kuromoji": "^0.1.2",
     "kuroshiro": "^1.2.1",
+    "node-unrar-js": "^2.0.2",
     "pdfjs-dist": "^6.4.299"
   }
 }

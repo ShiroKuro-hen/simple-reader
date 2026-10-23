@@ -56,10 +56,14 @@ await context.addInitScript(() => {
 });
 
 let page;
+let wasmSeen = []; // the unrar .wasm requests made by the current test's page
 const results = [];
 async function test(name, fn) {
   if (process.env.ONLY && !new RegExp(process.env.ONLY).test(name)) return;
   page = await context.newPage();
+  wasmSeen = [];
+  // Only the real download: Vite's dev server also requests the .wasm as a module (?import&url), which production never does.
+  page.on('request', (r) => /\.wasm$/.test(r.url()) && wasmSeen.push(r.url()));
   const errors = [];
   page.on('console', (m) => process.env.DEBUG && console.log('      [console]', m.text()));
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -740,6 +744,130 @@ await test('cbz: a larger font size zooms and scrolls, a page turn returns to th
   }));
   assert.deepEqual(look, { bg: 'rgb(18, 18, 18)', filter: 'none' });
 });
+
+// ---- Comic RAR (cbr) reader ------------------------------------------------------------------------------------
+// The same six pages as manga.cbz, packed into a RAR (store-rar.ts). Which container a file is comes from its bytes.
+const openBuilt = (recipe, name, settings) => ev(([r, n, s]) => sr.openBuilt(r, n, { settings: s }).then(() => 0), [recipe, name, settings]);
+const openAs = (name, asName, settings) => ev(([n, a, s]) => sr.openFixtureAs(n, a, { settings: s }).then(() => 0), [name, asName, settings]);
+const failureOf = (recipe, name) =>
+  ev(async ([r, n]) => {
+    try {
+      await sr.openBuilt(r, n);
+      return null;
+    } catch (e) {
+      return String(e);
+    }
+  }, [recipe, name]);
+
+await test('cbr: a RAR named .cbr opens on page 1 of 6, and the first relocation says so', async () => {
+  await openBuilt('manga-rar', 'manga.cbr', MANGA());
+  assert.deepEqual(await last(), { location: '1', fraction: 1 / 6, label: '1 / 6' });
+  assert.deepEqual(await pageNumbers(), [1], 'the cover is alone');
+  isColour((await shownPages())[0].colour, '1.png', 'page 1');
+});
+
+await test('cbr: pages follow natural order, so the fourth page is 4.png and not 10.png', async () => {
+  await openBuilt('manga-rar', 'manga.cbr', MANGA('single'));
+  for (let n = 1; n <= 6; n++) {
+    if (n > 1) await nav('next');
+    const [p] = await shownPages();
+    assert.equal(p.page, n);
+    isColour(p.colour, ORDER[n - 1], `page ${n}`);
+  }
+});
+
+await test('cbr: auto layout shows the spreads right to left, and next, prev and the ends behave as for a cbz', async () => {
+  await openBuilt('manga-rar', 'manga.cbr', MANGA('auto', true));
+  assert.deepEqual(await pageNumbers(), [1]);
+  await nav('next');
+  assert.deepEqual(await pageNumbers(), [3, 2], 'spread 2-3, displayed right to left');
+  assert.equal((await last()).label, '2 / 6');
+  await nav('next');
+  assert.deepEqual(await pageNumbers(), [5, 4], 'spread 4-5');
+  await nav('next');
+  assert.deepEqual(await pageNumbers(), [6], 'the last page is alone');
+  const count = () => ev(() => session.relocs.length);
+  const before = await count();
+  await ev(() => session.handle.next());
+  await page.waitForTimeout(300);
+  assert.equal(await count(), before, 'no relocation past the last page');
+  assert.deepEqual(await pageNumbers(), [6]);
+  await nav('prev');
+  assert.deepEqual(await pageNumbers(), [5, 4], 'back to spread 4-5');
+  assert.equal((await last()).label, '4 / 6');
+});
+
+await test('cbr: destroy revokes every object URL and empties the container', async () => {
+  const baseline = await ev(() => __liveBlobUrls());
+  await openBuilt('manga-rar', 'manga.cbr', MANGA('auto', true));
+  await nav('next');
+  assert.ok((await ev(() => __liveBlobUrls())) > baseline, 'pages are decoded while open');
+  await ev(() => session.handle.destroy());
+  assert.equal(await ev(() => __liveBlobUrls()), baseline);
+  assert.equal(await ev(() => document.getElementById('host').children.length), 0);
+});
+
+await test('cbr: a zip named .cbr opens as a comic, because the bytes say zip', async () => {
+  await openAs('manga.cbz', 'manga.cbr', MANGA('single'));
+  assert.deepEqual(await last(), { location: '1', fraction: 1 / 6, label: '1 / 6' });
+  isColour((await shownPages())[0].colour, '1.png', 'page 1');
+  assert.equal((await nav('goTo', '99')).label, '6 / 6');
+});
+
+await test('cbr: a RAR named .cbz opens as a comic, because the bytes say RAR', async () => {
+  await openBuilt('manga-rar', 'manga.cbz', MANGA('single'));
+  assert.deepEqual(await last(), { location: '1', fraction: 1 / 6, label: '1 / 6' });
+  assert.equal((await nav('goTo', '99')).label, '6 / 6');
+  isColour((await shownPages())[0].colour, ORDER[5], 'page 6 is 11.png in reading order');
+});
+
+await test('cbr: a RAR with no images, or a damaged one, fails to open and leaves the container clean', async () => {
+  for (const [recipe, why] of [
+    ['rar-no-images', /no pages/],
+    ['rar-damaged', /RAR archive could not be read: /],
+  ]) {
+    const msg = await failureOf(recipe, `${recipe}.cbr`);
+    assert.match(msg ?? '', why, `${recipe} should reject for its own reason`);
+    assert.equal(await ev(() => document.getElementById('host').children.length), 0, recipe);
+  }
+});
+
+await test('wasm: opening a zip never downloads the unrar wasm, whatever its name', async () => {
+  await open('manga.cbz', { settings: MANGA('single') });
+  assert.equal((await nav('next')).label, '2 / 6');
+  assert.deepEqual(wasmSeen, [], 'a zip has no need of the decoder');
+});
+
+await test('wasm: a zip named .cbr does not download it either', async () => {
+  await openAs('manga.cbz', 'manga.cbr', MANGA('single'));
+  assert.deepEqual(wasmSeen, [], 'the bytes are zip, so the decoder is not needed');
+});
+
+await test('wasm: opening a RAR downloads the unrar wasm exactly once, and turning pages does not fetch it again', async () => {
+  await openBuilt('manga-rar', 'manga.cbr', MANGA('single'));
+  assert.equal(wasmSeen.length, 1, `wasm requests: ${wasmSeen.join(', ')}`);
+  await nav('next');
+  await nav('next');
+  assert.equal(wasmSeen.length, 1, 'one request per page load');
+});
+
+// Opt-in: COMIC_RAR=/path/to/real.cbr runs against a real comic (never committed). The file goes in through the page's file input.
+if (process.env.COMIC_RAR) {
+  await test('cbr real file (COMIC_RAR): page 1 renders, next works, and the page count is reported', async () => {
+    await page.setInputFiles('#pick', process.env.COMIC_RAR);
+    const t0 = Date.now();
+    await ev((s) => sr.openPicked({ settings: s }).then(() => 0), MANGA('single'));
+    const ms = Date.now() - t0;
+    const first = await ev(() => { const i = document.querySelector('.sr-manga img'); return { alt: i?.alt, width: i?.naturalWidth }; });
+    assert.equal(first.alt, 'Page 1');
+    assert.ok(first.width > 0, 'page 1 decoded to pixels');
+    const pages = Number((await last()).label.split(' / ')[1]);
+    assert.ok(pages > 1, `a real comic has more than one page (${pages})`);
+    assert.equal((await nav('next')).label, `2 / ${pages}`);
+    assert.ok((await ev(() => document.querySelector('.sr-manga img').naturalWidth)) > 0, 'page 2 decoded');
+    console.log(`      real cbr: ${pages} pages, page 1 shown after ${ms} ms (the open, which includes reading the archive listing)`);
+  });
+}
 
 await browser.close();
 await server.close();

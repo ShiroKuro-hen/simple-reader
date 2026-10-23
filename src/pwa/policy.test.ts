@@ -13,6 +13,7 @@ const built = [
   { path: 'dict/base.dat.gz', digest: 'd1' },
   { path: 'dict/jmdict.json.gz', digest: 'd2' },
   { path: 'pdfjs/cmaps/78-H.bcmap', digest: 'c1' },
+  { path: 'assets/unrar-De7VYsPt.wasm', digest: 'u1' },
 ];
 
 describe('buildPrecache', () => {
@@ -30,8 +31,8 @@ describe('buildPrecache', () => {
     ]);
   });
 
-  it('leaves out what is big and lazy (dictionaries, cmaps), the worker itself and source maps', () => {
-    for (const skipped of ['sw.js', 'dict/base.dat.gz', 'dict/jmdict.json.gz', 'pdfjs/cmaps/78-H.bcmap', 'assets/index-Bg-qIjMp.js.map'])
+  it('leaves out what is big and lazy (dictionaries, cmaps, the RAR decoder), the worker itself and source maps', () => {
+    for (const skipped of ['sw.js', 'dict/base.dat.gz', 'dict/jmdict.json.gz', 'pdfjs/cmaps/78-H.bcmap', 'assets/unrar-De7VYsPt.wasm', 'assets/index-Bg-qIjMp.js.map'])
       expect(urls).not.toContain(skipped);
   });
 
@@ -50,6 +51,7 @@ describe('buildPrecache', () => {
     const edit = (path: string) => built.map((f) => (f.path === path ? { ...f, digest: 'changed' } : f));
     expect(buildPrecache(edit('dict/jmdict.json.gz')).version).toBe(version);
     expect(buildPrecache(edit('sw.js')).version).toBe(version);
+    expect(buildPrecache(edit('assets/unrar-De7VYsPt.wasm')).version).toBe(version);
   });
 });
 
@@ -70,6 +72,7 @@ describe('route', () => {
       ['dict/base.dat.gz', 'runtime'],
       ['dict/jmdict.json.gz', 'runtime'],
       ['pdfjs/cmaps/78-H.bcmap', 'runtime'],
+      ['assets/unrar-De7VYsPt.wasm', 'runtime'], // the RAR decoder: fetched when a .cbr is opened, then kept
       ['assets/never-heard-of-it.js', 'network'], // unknown same-origin files are not cached behind the user's back
       ['sw.js', 'bypass'], // the browser updates the worker itself
     ])('%s -> %s', (rel, expected) => expect(r(rel)).toBe(expected));
