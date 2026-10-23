@@ -270,6 +270,15 @@ async (page, env = {}) => {
     await reset();
   });
 
+  await step('vertical text: a click on the edge of a kanji, right next to the 。 that follows it, still selects the word', async () => {
+    // Where one text node ends and the next begins the browser reports the caret in the NEXT node; the kanji must still win.
+    const p = await charAt('景色', { index: 1 });
+    const edge = { x: p.x, y: p.y + p.h / 2 - 0.5 };
+    await page.mouse.click(edge.x, edge.y);
+    await untilSelected('景色', 'the word 景色 from its lower edge', 40000, edge);
+    await reset();
+  });
+
   await step('touch: a tap on a word selects it and leaves the toolbars alone; a tap on blank page toggles them', async () => {
     const before = await chromeHidden();
     const p = await charAt('景色', { index: 1 });

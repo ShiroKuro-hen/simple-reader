@@ -29,16 +29,34 @@ function japaneseAt(doc: Document, x: number, y: number): { node: Text; index: n
     return first && isJapanese(first.data[0] ?? '') ? { node: first, index: 0 } : null;
   }
 
-  // The caret sits between two characters: the one under the pointer is whichever box holds the point.
-  for (const i of [caret.offset - 1, caret.offset]) {
-    if (i < 0 || i >= text.length) continue;
+  // The caret sits between two characters, and at a text node's edge one of them is in the neighbouring node (a kanji
+  // inside <ruby> next to the 。 after it): the browser then reports the NEXT node, so look at both sides. Of the two,
+  // only a Japanese character can be a word, and it counts when the point is on it or within a couple of pixels.
+  let best: { node: Text; index: number } | null = null;
+  let bestDistance = Infinity;
+  for (const c of charsAround(text, caret.offset)) {
+    if (!isJapanese(c.node.data[c.index]!)) continue;
     const r = doc.createRange();
-    r.setStart(text, i);
-    r.setEnd(text, i + 1);
+    r.setStart(c.node, c.index);
+    r.setEnd(c.node, c.index + 1);
     const q = r.getBoundingClientRect();
-    if (x >= q.left && x < q.right && y >= q.top && y < q.bottom) return isJapanese(text.data[i]!) ? { node: text, index: i } : null;
+    const d = Math.hypot(Math.max(q.left - x, 0, x - q.right), Math.max(q.top - y, 0, y - q.bottom));
+    if (d < bestDistance) [best, bestDistance] = [c, d];
   }
-  return null;
+  return bestDistance <= 2 ? best : null;
+}
+
+/** The characters on each side of a caret, crossing into the neighbouring base-text node at a node's edge. */
+function charsAround(text: Text, offset: number): { node: Text; index: number }[] {
+  const walker = baseTextWalker(text.ownerDocument.body);
+  walker.currentNode = text;
+  const out: { node: Text; index: number }[] = [];
+  const before = offset > 0 ? text : (walker.previousNode() as Text | null);
+  if (before?.length) out.push({ node: before, index: offset > 0 ? offset - 1 : before.length - 1 });
+  walker.currentNode = text;
+  const after = offset < text.length ? text : (walker.nextNode() as Text | null);
+  if (after?.length) out.push({ node: after, index: offset < text.length ? offset : 0 });
+  return out;
 }
 
 /**
