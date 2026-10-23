@@ -318,6 +318,14 @@ async (page, env = {}) => {
       return null;
     }, 'a blank spot on the page', 8000);
     const hidden = await chromeHidden();
+    // CI diagnosis: log every click and selection change in the book frames from here on.
+    for (const f of frames())
+      await f.evaluate(() => {
+        window.__ws = [];
+        const t0 = performance.now();
+        document.addEventListener('click', (e) => window.__ws.push(['click', Math.round(e.clientX), Math.round(e.clientY), e.pointerType, Math.round(performance.now() - t0)]), true);
+        document.addEventListener('selectionchange', () => window.__ws.push(['sel', document.getSelection()?.toString(), Math.round(performance.now() - t0)]));
+      }).catch(() => {});
     await page.touchscreen.tap(spot.x, spot.y);
     await until(async () => (await chromeHidden()) !== hidden, 'a tap on blank page toggles the toolbars', 4000);
     const left = await selected();
@@ -336,7 +344,8 @@ async (page, env = {}) => {
           };
         }, { x: spot.x - box.x, y: spot.y - box.y }).catch((err) => String(err));
       }));
-      throw new Error(`selection after a tap on blank page: expected "", got ${JSON.stringify(left)} | ${JSON.stringify(where)}`);
+      const log = await Promise.all(frames().map((f) => f.evaluate(() => window.__ws).catch(() => null)));
+      throw new Error(`selection after a tap on blank page: expected "", got ${JSON.stringify(left)} | ${JSON.stringify(where)} | log ${JSON.stringify(log)}`);
     }
   });
 

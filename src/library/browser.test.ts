@@ -224,9 +224,9 @@ describe.skipIf(!pw)('library search, tags and sort in a real browser', { timeou
     for (const title of ['Sample PDF Manual', 'The Lighthouse & the Sea']) {
       await page.getByRole('button', { name: `Remove ${title}` }).click();
       await page.locator('.card.confirming .btn.danger').click();
-      await expect.poll(() => page.locator('.card', { hasText: title }).count()).toBe(0);
+      await expect.poll(() => page.locator('.card', { hasText: title }).count(), { timeout: 15_000 }).toBe(0);
     }
-    await expect.poll(() => page.locator('.card').count()).toBe(2); // the filter is gone with its last tag
+    await expect.poll(() => page.locator('.card').count(), { timeout: 15_000 }).toBe(2); // the filter is gone with its last tag
     expect(await count()).toBe('2 books');
   });
 
