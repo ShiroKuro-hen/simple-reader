@@ -27,5 +27,6 @@ export function epubCss({ theme, fontSize, writing }: ReaderSettings): string {
     body { background: transparent !important; color: ${fg} !important; }
     ${force}${horizontal}
     ::selection { background: ${theme === 'dark' ? '#3b5b8a' : '#b3d4fc'}; color: inherit; }
+    rt, rp { user-select: none !important; -webkit-user-select: none !important; }
   `;
 }

@@ -67,6 +67,8 @@ Open an EPUB or PDF from the library screen (file picker or drag and drop). Sele
 
 Vertical EPUBs (such as Japanese novels) keep their direction by default: the page-turn keys and the edge clicks follow it, so the left edge goes forward. Settings > Text direction can force horizontal, left-to-right reading.
 
+In Japanese text a click or tap selects the whole word, found with the tokenizer, and furigana readings are never part of a selection; dragging still selects any phrase.
+
 ## Cloudflare R2 setup (optional sync)
 
 Backup copies your library (books, metadata, reading progress, settings) to a bucket you own. R2 has a free tier that is plenty for a personal library.

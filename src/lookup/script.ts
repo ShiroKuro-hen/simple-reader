@@ -1,6 +1,6 @@
 // Pure text helpers: no DOM, no network.
 export const HAS_KANJI = /[々〆㐀-䶿一-鿿豈-﫿]/;
-const HAS_KANA = /[぀-ヿｦ-ﾟ]/;
+export const HAS_KANA = /[぀-ヿｦ-ﾟ]/;
 
 export function detectScript(text: string): 'ja' | 'latin' | 'other' {
   if (HAS_KANA.test(text) || HAS_KANJI.test(text)) return 'ja';

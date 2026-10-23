@@ -1,6 +1,7 @@
 // Page-side helpers for run.mjs. Exposes the real modules on window.sr; the assertions live in run.mjs.
 import * as annotations from '../../annotations/model';
 import { openBook } from '../index';
+import { readSelection } from '../selection';
 import * as mangaNav from '../manga-nav';
 import { storageContract } from '../../storage/contract';
 import { createLibrary } from '../../storage/library';
@@ -114,7 +115,25 @@ function rectOf(s: Session, needle: string) {
     .getContents()
     .flatMap((c: any) => (c.overlayer ? [...c.overlayer.element.querySelectorAll('g')] : []));
 
+/** Selects across a paragraph with furigana (the readings are real <rt> elements) and returns readSelection's answer. */
+function selectAcrossRuby() {
+  const p = document.createElement('p');
+  p.innerHTML = '今日は<ruby>漢<rt>かん</rt></ruby>字を<ruby>読<rt>よ</rt></ruby>む。次の文です。';
+  document.body.append(p);
+  const range = document.createRange();
+  range.setStart(p.childNodes[0]!, 1);
+  range.setEnd(p.childNodes[4]!, 1);
+  const sel = document.getSelection()!;
+  sel.removeAllRanges();
+  sel.addRange(range);
+  const out = readSelection(document);
+  sel.removeAllRanges();
+  p.remove();
+  return out;
+}
+
 (window as any).sr = {
+  selectAcrossRuby,
   annotations,
   mangaNav,
   storageContract,

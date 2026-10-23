@@ -566,6 +566,13 @@ await test('epub: highlights are tinted for the theme: multiply on paper, a plai
   assert.deepEqual(await look(), ['multiply', '0.6']);
 });
 
+await test('epub: a selection across furigana has the base text only, in text and in context', async () => {
+  const sel = await ev(() => sr.selectAcrossRuby());
+  // The browser's own toString() has the readings in it here (no epub CSS on this page); readSelection must not.
+  assert.equal(sel.text, '日は漢字を読む');
+  assert.equal(sel.context, '今日は漢字を読む。');
+});
+
 await test('pdf: here() names the page and its first words; selections have no location; setAnnotations is harmless', async () => {
   await open('sample.pdf', { location: '3' });
   const here = await ev(() => session.handle.here());

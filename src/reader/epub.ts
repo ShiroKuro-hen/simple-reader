@@ -5,6 +5,7 @@ import { collapse } from '../vendor/foliate-js/epubcfi.js';
 import { Overlayer } from '../vendor/foliate-js/overlayer.js';
 import { loadEpub } from './epub-book';
 import { readSelection, replayable } from './selection';
+import { installWordSelect } from './word-select';
 import { epubCss } from './theme';
 
 const toToc = (items: any[] = []): TocItem[] =>
@@ -72,6 +73,7 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
 
   view.addEventListener('load', ({ detail: { doc, index } }: CustomEvent<{ doc: Document; index: number }>) => {
     opts.onDocLoad?.(doc);
+    installWordSelect(doc, (e) => !!view.renderer.getContents().find((c: any) => c.doc === doc)?.overlayer?.hitTest(e)[0]);
     // Debounced so the popup waits for the drag/handles to settle instead of firing per character.
     doc.addEventListener('selectionchange', () => {
       clearTimeout(timer);

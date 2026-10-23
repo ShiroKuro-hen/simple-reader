@@ -5,6 +5,8 @@ import { epubCss, THEMES } from './theme';
 const base: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, writing: 'book' };
 const with_ = (over: Partial<ReaderSettings>) => ({ ...base, ...over });
 const THEME_NAMES = Object.keys(THEMES) as Theme[];
+// Readings (<rt>, <rp>) can never start, end or sit inside a selection, in any theme or writing mode.
+const READING_RULE = 'rt, rp { user-select: none !important; -webkit-user-select: none !important; }';
 
 describe('epubCss, book text direction', () => {
   it('leaves the writing mode to the book', () => {
@@ -16,12 +18,13 @@ describe('epubCss, book text direction', () => {
     }
   });
 
-  it('is byte-identical to the output before the setting existed', () => {
+  it('is identical to the output before the setting existed, plus exactly the reading rule', () => {
     expect(epubCss(base)).toBe(`
     html { background: #ffffff !important; color: #1a1a1a !important;  }
     body { background: transparent !important; color: #1a1a1a !important; }
     
     ::selection { background: #b3d4fc; color: inherit; }
+    ${READING_RULE}
   `);
   });
 });
@@ -72,6 +75,22 @@ describe('epubCss, every theme', () => {
         expect(css).toContain(`background: ${THEMES[theme].bg} !important`);
         expect(css).toContain(`color: ${THEMES[theme].fg} !important`);
       }
+    }
+  });
+});
+
+describe('epubCss, furigana readings are not selectable', () => {
+  it('adds the reading rule in every theme and writing mode', () => {
+    for (const theme of THEME_NAMES) {
+      for (const writing of ['book', 'horizontal'] as const) {
+        expect(epubCss(with_({ theme, writing }))).toContain(READING_RULE);
+      }
+    }
+  });
+
+  it('adds it exactly once', () => {
+    for (const theme of THEME_NAMES) {
+      expect(epubCss(with_({ theme, writing: 'horizontal' })).split(READING_RULE).length).toBe(2);
     }
   });
 });

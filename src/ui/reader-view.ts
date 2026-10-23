@@ -160,19 +160,6 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
     void applyJapanese(doc);
   }
 
-  // A selection over furigana would otherwise include the <rt> readings in its text.
-  function withoutRuby(text: string): string {
-    for (const d of docs) {
-      const s = d.getSelection();
-      if (!s || s.isCollapsed || s.toString().trim() !== text) continue;
-      const box = d.createElement('div');
-      box.append(s.getRangeAt(0).cloneContents());
-      box.querySelectorAll('rt, rp').forEach((n) => n.remove());
-      return box.textContent?.trim() || text;
-    }
-    return text;
-  }
-
   // --- Japanese reading ---
   let japaneseWarned = false;
   async function applyJapanese(doc: Document) {
@@ -288,7 +275,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
         const a = items.find((i) => i.id === id && !i.deleted);
         if (a) popup.showAnnotation(a, rect);
       });
-      opened.onSelect((sel) => popup.show({ ...sel, text: withoutRuby(sel.text) }));
+      opened.onSelect((sel) => popup.show(sel)); // readSelection leaves the furigana readings out
       let lastLocation = '';
       opened.onRelocate((p) => {
         drawEdges(); // a new section may turn the other way (vertical text)
