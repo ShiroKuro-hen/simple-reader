@@ -6,9 +6,12 @@ import type { InstallPrompt } from '../pwa/install';
 import { addBook, getProgress, listBooks, removeBook, setTags } from '../storage/library';
 import { coverInitial, titleHue } from './cover';
 import { h, icon, iconButton, sheet, toast } from './dom';
+import type { Entry } from '../library/series';
 import { libIcon } from './library-icons';
 import { bookLabel } from './reading';
 import { createSettings, type App } from './settings';
+
+type SeriesEntry = Extract<Entry, { kind: 'series' }>;
 
 const isBook = (f: File) => /\.(epub|pdf|cbz)$/i.test(f.name) || /^application\/(epub\+zip|pdf|vnd\.comicbook\+zip|x-cbz)$/.test(f.type);
 
@@ -39,6 +42,8 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   let query = '';
   let selected: string[] = [];
   let sort = storedSort();
+  /** Lower-cased name of the series whose volumes are listed; session only, never stored. */
+  let openSeries: string | null = null;
 
   const input = h('input', {
     type: 'file', accept: '.epub,.pdf,.cbz,application/epub+zip,application/pdf,application/vnd.comicbook+zip', multiple: true, hidden: true,
@@ -146,6 +151,9 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     selected = selected.filter((t) => counts.some((c) => c.tag === t)); // a tag nobody carries any more cannot stay selected
     const lastRead = new Map([...progress].filter(([, p]) => p.fraction > 0).map(([id, p]) => [id, p.updatedAt]));
     const view = libraryView(books, { query, tags: selected, sort }, lastRead);
+    // The open series is dropped when it no longer has a visible volume (removed, or filtered out): back to the library.
+    const series = openSeries === null ? undefined : view.entries.find((e): e is SeriesEntry => e.kind === 'series' && e.name.toLowerCase() === openSeries);
+    if (!series) openSeries = null;
 
     tools.hidden = count.hidden = view.state === 'empty-library';
     chips.hidden = !counts.length;
@@ -174,9 +182,47 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
           h('p', {}, query.trim() ? `No book matches "${query.trim()}"${selected.length ? ' with those tags' : ''}.` : 'No book has all of those tags.'),
           h('button', { class: 'btn', type: 'button', onclick: clearFilters }, 'Clear search and filters')),
       );
+    } else if (series) {
+      results.replaceChildren(
+        h('div', { class: 'series-head' },
+          iconButton('back', 'Back to library', closeSeries, 'series-back'),
+          h('h2', {}, series.name)),
+        h('ul', { class: 'grid' }, ...series.books.map(card)));
     } else {
-      results.replaceChildren(h('ul', { class: 'grid' }, ...view.books.map(card)));
+      results.replaceChildren(h('ul', { class: 'grid' }, ...view.entries.map((e) => (e.kind === 'book' ? card(e.book) : seriesCard(e)))));
     }
+  }
+
+  function showSeries(key: string) {
+    openSeries = key;
+    render();
+    results.querySelector<HTMLElement>('.series-back')?.focus();
+  }
+
+  function closeSeries() {
+    const key = openSeries;
+    openSeries = null;
+    render();
+    results.querySelector<HTMLElement>(`[data-series="${CSS.escape(key ?? '')}"] .card-open`)?.focus();
+  }
+
+  const volumes = (n: number) => `${n} volume${n === 1 ? '' : 's'}`;
+
+  function coverOf(b: BookMeta) {
+    return b.cover
+      ? h('img', { src: b.cover, alt: '', loading: 'lazy' })
+      : h('div', { class: 'cover-ph', style: `--h:${titleHue(b.title)}` },
+          h('span', {}, coverInitial(b.title)), h('small', {}, b.format.toUpperCase()));
+  }
+
+  /** A series folder in the library: its first volume's cover, the series name, and how many volumes it has. */
+  function seriesCard(s: SeriesEntry) {
+    const key = s.name.toLowerCase();
+    const open = h('button', { class: 'card-open', type: 'button', 'aria-label': `Open series ${s.name}, ${volumes(s.books.length)}`, onclick: () => showSeries(key) },
+      h('div', { class: 'cover' }, coverOf(s.books[0]!)),
+      h('p', { class: 'card-title' }, s.name),
+      h('p', { class: 'card-author' }, volumes(s.books.length)));
+    return h('li', { class: 'card series', 'data-series': key }, open);
   }
 
   function card(b: BookMeta) {
@@ -184,13 +230,9 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     const p = progress.get(b.id);
     const fill = h('i', { style: `transform:scaleX(${p && p.fraction > 0 ? Math.min(1, p.fraction) : 0})` });
     if (p && p.fraction > 0) open.setAttribute('aria-label', bookLabel(b.title, p.fraction));
-    const cover = b.cover
-      ? h('img', { src: b.cover, alt: '', loading: 'lazy' })
-      : h('div', { class: 'cover-ph', style: `--h:${titleHue(b.title)}` },
-          h('span', {}, coverInitial(b.title)), h('small', {}, b.format.toUpperCase()));
     const tags = cleanTags(b.tags);
     open.append(
-      h('div', { class: 'cover' }, cover),
+      h('div', { class: 'cover' }, coverOf(b)),
       h('p', { class: 'card-title' }, b.title),
       h('p', { class: 'card-author' }, b.author ?? ' '),
       ...(tags.length ? [h('p', { class: 'card-tagline' }, tags.map((t) => `#${t}`).join(' '))] : []),

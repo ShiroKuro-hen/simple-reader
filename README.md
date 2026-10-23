@@ -31,7 +31,7 @@ Most readers either do a lot and get in the way, or do little and send your libr
 - **Japanese support:** hiragana reading and romaji on select, plus a furigana-over-kanji mode.
 - **Local-first:** books are files on your device (browser OPFS). No account, no database.
 - **Highlights, notes and bookmarks:** four highlight colours and notes on EPUB text, page bookmarks in EPUB and PDF, a side panel to browse and jump, and export to Markdown (with a copy button) for your notes app.
-- **Library:** search by title, author or tag (accent-insensitive, Japanese-safe), tags, sorting, and recently read.
+- **Library:** search by title, author, series or tag (accent-insensitive, Japanese-safe), tags, sorting, recently read, and series shown as one card with their volumes inside.
 - **Optional backup/sync** to your own free Cloudflare R2 bucket. It never deletes anything; the newest reading progress wins and highlights are merged one by one, so two devices never lose each other's notes.
 - **Installable and offline:** a PWA that opens without a connection once visited. Japanese reading works offline after the first Japanese lookup.
 - **Runs as a web app** in the browser, with Windows and Android builds produced by CI (see below).
@@ -110,7 +110,8 @@ Taken from [PLAN.md](PLAN.md) (written in Spanish). Checked means it exists toda
 - [ ] Manga: image folders, vertical (webtoon) scroll
 - [ ] Right-to-left and vertical EPUB, in-book search
 - [x] Highlights, notes and bookmarks in EPUB (PDF: bookmarks only; PDF highlights pending)
-- [ ] Library: import whole folders, series and volumes
+- [x] Library series: a folder of volumes in your R2 bucket imports as one series (Settings > Import folders)
+- [ ] Library: import whole folders from the device
 - [x] PWA with offline support
 - [ ] Desktop and Android: CI builds exist; test on real devices, sign releases, check lookups under the native origin
 - [ ] Optional: custom CSS and remappable keys, user dictionary

@@ -106,6 +106,18 @@ async (page, ctx = {}) => {
     await page.locator('.lib').waitFor();
     await until(async () => (await page.locator('.card').count()) > 0, 'library to list books');
   }
+  // Books go in through the real storage path (addBook, with its series), then the library is reloaded to list them.
+  async function seedBooks(items) {
+    await page.evaluate(async (items) => {
+      const { addBook } = await import('/src/storage/library.ts');
+      for (const [name, series] of items) {
+        const bytes = await (await fetch('/src/reader/fixtures/' + name)).arrayBuffer();
+        await addBook(new File([bytes], name), series ? { series } : {});
+      }
+    }, items);
+    await page.reload();
+    await page.locator('.lib').waitFor();
+  }
   async function resetApp() {
     await page.goto(BASE);
     await page.evaluate(async () => {
@@ -433,6 +445,89 @@ async (page, ctx = {}) => {
     await page.locator('.lib').waitFor();
     ok((await page.evaluate(() => document.documentElement.dataset.theme)) === 'light', 'explicit pick lost to system scheme');
     await page.emulateMedia({ colorScheme: 'light' });
+  });
+
+  // ---- series: volumes of one series folder show as one card and open to their own list ----
+  const SERIES = 'Lord of the Mysteries';
+  const smallTargets = () => page.evaluate(() => [...document.querySelectorAll('.lib button, .lib .icon-btn')].filter((b) => b.offsetParent && (b.getBoundingClientRect().height < 43.5 || b.getBoundingClientRect().width < 43.5)).map((b) => b.className + ':' + b.textContent.trim()));
+
+  await step('series: three volumes are one card, the standalone book stays a book card, count counts books', async () => {
+    await resetApp();
+    await seedBooks([['book-en.epub', SERIES], ['book-ja.epub', SERIES], ['sample.pdf', SERIES], ['manga.cbz']]);
+    await until(async () => (await page.locator('.card').count()) === 2, 'one series card and one book card');
+    ok((await page.getByRole('button', { name: `Open series ${SERIES}, 3 volumes` }).count()) === 1, 'series card label missing');
+    ok((await page.locator('.card-title', { hasText: SERIES }).count()) === 1, 'series title missing');
+    ok((await page.locator('.card-author', { hasText: '3 volumes' }).count()) === 1, 'series subtitle "3 volumes" missing');
+    ok((await page.locator('.cover img, .cover-ph').count()) >= 2, 'series card has no cover');
+    const count = (await text('.lib-count')).trim();
+    ok(count === '4 books', 'count should count books, got: ' + count);
+  });
+
+  await step('series: search by series name shows the card; activating it lists the volumes under a Back header; Back keeps the search', async () => {
+    await page.locator('.search-input').fill('lord');
+    await until(async () => (await page.locator('.card').count()) === 1, 'only the series card for "lord"');
+    ok((await text('.lib-count')).trim() === '3 of 4 books', 'count for a search should count books: ' + (await text('.lib-count')));
+    await page.getByRole('button', { name: `Open series ${SERIES}, 3 volumes` }).click();
+    await page.getByRole('heading', { name: SERIES, level: 2 }).waitFor();
+    ok((await page.getByRole('button', { name: 'Back to library' }).count()) === 1, 'Back to library button missing');
+    ok((await page.locator('.card').count()) === 3, 'expected the 3 volumes, got ' + (await page.locator('.card').count()));
+    await page.getByRole('button', { name: 'Back to library' }).click();
+    await until(async () => (await page.getByRole('button', { name: `Open series ${SERIES}, 3 volumes` }).count()) === 1, 'library with the series card again');
+    ok((await page.locator('.search-input').inputValue()) === 'lord', 'search was lost on Back');
+    ok((await text('.lib-count')).trim() === '3 of 4 books', 'count after Back: ' + (await text('.lib-count')));
+    await page.locator('.search-input').fill('');
+    await until(async () => (await page.locator('.card').count()) === 2, 'both cards back after clearing the search');
+  });
+
+  await step('series: a volume opens in the reader as usual, Back returns to the library', async () => {
+    await page.getByRole('button', { name: `Open series ${SERIES}, 3 volumes` }).click();
+    await page.getByRole('button', { name: /^Open The Lighthouse/ }).click();
+    await page.locator('.reader').waitFor();
+    await until(async () => !(await page.locator('.loading').count()), 'volume to load', 20000);
+    await backToLibrary();
+  });
+
+  await step('series: keyboard opens the series and Back returns focus to it; phone 390: no sideways scroll, 44px targets', async () => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await sleep(300);
+    await page.getByRole('button', { name: `Open series ${SERIES}, 3 volumes` }).focus();
+    await page.keyboard.press('Enter');
+    await page.getByRole('heading', { name: SERIES, level: 2 }).waitFor();
+    ok((await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))) === 'Back to library', 'focus not on the Back button after opening');
+    ok((await overflowX()) <= 0, 'series view scrolls horizontally on phone');
+    const small = await smallTargets();
+    ok(small.length === 0, 'small targets in series view: ' + small.join(', '));
+    await page.keyboard.press('Enter'); // the Back button, from the keyboard
+    await page.getByRole('button', { name: `Open series ${SERIES}, 3 volumes` }).waitFor();
+    ok((await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))) === `Open series ${SERIES}, 3 volumes`, 'focus not returned to the series card');
+    await page.setViewportSize({ width: 1280, height: 800 });
+  });
+
+  await step('series: tag a volume from the series view; removing volumes shrinks the series and its label, the last one returns to the library', async () => {
+    await page.getByRole('button', { name: `Open series ${SERIES}, 3 volumes` }).click();
+    await page.getByRole('button', { name: 'Edit tags of The Lighthouse & the Sea' }).click();
+    const field = page.locator('.tag-input'); // has a datalist, so its role is combobox, not textbox
+    await field.fill('reread');
+    await field.press('Enter');
+    await until(async () => (await page.locator('.tag-sheet .chip', { hasText: 'reread' }).count()) === 1, 'tag chip in the sheet');
+    await page.locator('.tag-actions .btn').click();
+    await until(async () => (await page.locator('.card-tagline', { hasText: '#reread' }).count()) === 1, 'tag shown on the volume card');
+
+    for (let i = 0; i < 2; i++) { // remove two of the three volumes from inside the series
+      await page.getByRole('button', { name: /^Remove / }).first().click();
+      await page.locator('.card.confirming .confirm .danger').click();
+      await until(async () => (await page.locator('.card').count()) === 2 - i, 'volume removed');
+    }
+    ok((await page.getByRole('heading', { name: SERIES, level: 2 }).count()) === 1, 'series view closed with one volume left');
+    await page.getByRole('button', { name: 'Back to library' }).click();
+    await until(async () => (await page.getByRole('button', { name: `Open series ${SERIES}, 1 volume` }).count()) === 1, 'singular label for one volume');
+
+    await page.getByRole('button', { name: `Open series ${SERIES}, 1 volume` }).click();
+    await page.getByRole('button', { name: /^Remove / }).first().click();
+    await page.locator('.card.confirming .confirm .danger').click();
+    await until(async () => (await page.getByRole('button', { name: 'Back to library' }).count()) === 0, 'fall back to the library once the series is empty');
+    await until(async () => (await page.locator('.card').count()) === 1, 'only the standalone book left');
+    ok((await page.getByRole('button', { name: /^Open series/ }).count()) === 0, 'the empty series is still listed');
   });
 
   const failed = results.filter((r) => !r.ok);

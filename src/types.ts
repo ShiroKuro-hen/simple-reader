@@ -13,6 +13,8 @@ export interface BookMeta {
   addedAt: number;
   /** Small data: URL of the cover, if the book has one. */
   cover?: string;
+  /** Series name shown as one entry in the library; set when imported from a folder. Syncs with the meta file. */
+  series?: string;
   /** Shelves/labels chosen by the user, lowercase, trimmed, no duplicates. */
   tags?: string[];
   /** Set when the user edits the metadata (tags); sync keeps the newest. */

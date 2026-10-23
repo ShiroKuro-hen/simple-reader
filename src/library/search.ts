@@ -17,10 +17,10 @@ export function fold(s: string): string {
     .trim();
 }
 
-/** Every whitespace-separated word of `query` must appear somewhere in the title, author or tags. An empty query matches all. */
+/** Every whitespace-separated word of `query` must appear somewhere in the title, author, series or tags. An empty query matches all. */
 export function matches(book: BookMeta, query: string): boolean {
   const words = fold(query).split(' ').filter(Boolean);
   if (!words.length) return true;
-  const haystack = fold([book.title, book.author ?? '', ...(book.tags ?? [])].join('\n'));
+  const haystack = fold([book.title, book.author ?? '', book.series ?? '', ...(book.tags ?? [])].join('\n'));
   return words.every((w) => haystack.includes(w));
 }
