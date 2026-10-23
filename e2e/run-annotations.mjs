@@ -13,10 +13,11 @@ const server = await createServer({ root: repoRoot, logLevel: 'error', optimizeD
 await server.listen();
 const BASE = server.resolvedUrls.local[0];
 const browser = await launchChromium(pw);
-const specs = ['app.e2e.js', 'annotations.e2e.js', ...(process.env.REAL_EPUB ? ['real-annotations.e2e.js'] : [])];
+const specs = ['app.e2e.js', 'annotations.e2e.js', 'word-select.e2e.js', ...(process.env.REAL_EPUB ? ['real-annotations.e2e.js'] : [])];
 let failed = 0;
 for (const spec of specs) {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write'] });
+  // Touch is enabled for the word-select spec only: its taps must reach the page as touch input.
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write'], hasTouch: spec === 'word-select.e2e.js' });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));

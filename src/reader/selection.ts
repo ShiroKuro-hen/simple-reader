@@ -1,7 +1,9 @@
 import type { TextSelection } from '../types';
 import { sentenceAround } from './sentence';
 
-const BLOCK = 'p, li, blockquote, dd, dt, h1, h2, h3, h4, h5, h6, td, div, body';
+export const BLOCK = 'p, li, blockquote, dd, dt, h1, h2, h3, h4, h5, h6, td, div, body';
+/** Furigana readings: never part of a selection, its text or its context. */
+const READING = 'rt, rp';
 
 /**
  * Reads the live selection of `doc` as a TextSelection, or null if it is empty.
@@ -12,7 +14,7 @@ export function readSelection(doc: Document, block?: Element, offset = { x: 0, y
   const sel = doc.getSelection();
   if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
   const range = sel.getRangeAt(0);
-  const text = sel.toString().trim();
+  const text = withoutReadings(range, sel.toString().trim());
   if (!text) return null;
 
   const node = range.commonAncestorContainer;
@@ -28,9 +30,30 @@ export function readSelection(doc: Document, block?: Element, offset = { x: 0, y
   };
 }
 
+/** The selected text with the readings taken out. toString() keeps them when the range covers <rt>. */
+function withoutReadings(range: Range, raw: string): string {
+  const root = range.commonAncestorContainer;
+  const el = root instanceof Element ? root : root.parentElement;
+  if (!el || ![...el.querySelectorAll(READING)].some((n) => range.intersectsNode(n))) return raw;
+  const box = el.ownerDocument.createElement('div');
+  box.append(range.cloneContents());
+  box.querySelectorAll(READING).forEach((n) => n.remove());
+  return box.textContent?.trim() || raw;
+}
+
+/** Walks the base text of `root`: a reading element is skipped together with its text. */
+export function baseTextWalker(root: Element): TreeWalker {
+  return root.ownerDocument.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) =>
+      n.nodeType === Node.TEXT_NODE
+        ? NodeFilter.FILTER_ACCEPT
+        : (n as Element).matches(READING) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_SKIP,
+  });
+}
+
 /** Text of the block plus the selected range's character offsets in it (start is -1 if nothing inside is selected). */
 function flatten(container: Element, range: Range, joiner: string) {
-  const walker = container.ownerDocument.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const walker = baseTextWalker(container);
   let text = '';
   let start = -1;
   let end = -1;

@@ -23,6 +23,8 @@ declare module 'kuromoji/build/kuromoji.js' {
 declare module 'kuromoji-token' {
   export interface KuromojiToken {
     surface_form: string;
+    /** 1-based character position in the tokenised text; hand-made tokens in tests leave it out. */
+    word_position?: number;
     basic_form: string;
     pos: string;
     pos_detail_1?: string;

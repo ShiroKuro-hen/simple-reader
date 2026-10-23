@@ -722,6 +722,97 @@ async (page, ctx = {}) => {
     await until(async () => (await page.getByRole('button', { name: 'Open series Duo Comics, 2 volumes' }).count()) === 1, 'the comics series');
   });
 
+  // ---- vertical Japanese EPUB: its pages turn right to left, Settings > Text direction can force horizontal ----
+  const openSettings = async () => {
+    if (await page.locator('.reader').count()) await page.keyboard.press('Tab'); // reveals the chrome
+    await page.getByRole('button', { name: 'Reading settings' }).click();
+  };
+  const closeSettings = () => page.keyboard.press('Escape');
+  const edgeTurn = (side) => page.locator(`.edge-${side}`).getAttribute('data-turn');
+  if (await page.locator('.reader').count()) await backToLibrary();
+  await page.setInputFiles('input[type=file]', [FIX + 'book-ja-vertical.epub', FIX + 'sample.pdf', FIX + 'manga.cbz']);
+  await until(async () => (await page.getByRole('button', { name: /^Open 縦書きの本/ }).count()) === 1, 'the vertical book in the library', 15000);
+
+  await step('vertical EPUB: ArrowLeft turns forward and ArrowRight back; the left edge goes forward', async () => {
+    await openFromLibrary('縦書きの本');
+    await until(async () => (await text('.chapter')).trim() !== '', 'the first reported position');
+    ok((await edgeTurn('l')) === 'next' && (await edgeTurn('r')) === 'prev', 'edges not flipped for vertical text: ' + (await edgeTurn('l')));
+    const start = await pct();
+    const forward = await pressUntilTurn('ArrowLeft', start);
+    ok(parseInt(forward) > parseInt(start), `ArrowLeft did not advance: ${start} -> ${forward}`);
+    const back = await pressUntilTurn('ArrowRight', forward);
+    ok(parseInt(back) < parseInt(forward), `ArrowRight did not go back: ${forward} -> ${back}`);
+    const edge = await clickUntilTurn('.edge-l', back);
+    ok(parseInt(edge) > parseInt(back), `the left edge did not go forward: ${back} -> ${edge}`);
+    return `${start} -> ${forward} -> ${back} -> ${edge}`;
+  });
+
+  await step('Text direction: shown for the EPUB, and the default is "As in the book"', async () => {
+    await openSettings();
+    ok(await page.getByRole('heading', { name: 'Text direction' }).isVisible(), 'no Text direction section for an EPUB');
+    ok(await page.getByRole('button', { name: 'As in the book' }).getAttribute('aria-pressed') === 'true', 'As in the book is not the default');
+    await closeSettings();
+  });
+
+  await step('Text direction: Horizontal makes ArrowRight go forward and flips the left edge back', async () => {
+    await openSettings();
+    await page.getByRole('button', { name: 'Horizontal (left to right)' }).click();
+    ok(await page.getByRole('button', { name: 'Horizontal (left to right)' }).getAttribute('aria-pressed') === 'true', 'the choice is not pressed');
+    await closeSettings();
+    const before = await pct();
+    const after = await pressUntilTurn('ArrowRight', before);
+    ok(parseInt(after) > parseInt(before), `ArrowRight did not advance in horizontal: ${before} -> ${after}`);
+    ok((await edgeTurn('l')) === 'prev' && (await edgeTurn('r')) === 'next', 'edges still flipped for horizontal text');
+  });
+
+  await step('Text direction: back to "As in the book" makes the left edge forward again', async () => {
+    await openSettings();
+    await page.getByRole('button', { name: 'As in the book' }).click();
+    await closeSettings();
+    await until(async () => (await edgeTurn('l')) === 'next', 'the left edge to flip back');
+    // Horizontal may have left the reader on the last page, where a forward click cannot move: step back first.
+    const before = await pct();
+    const back = await pressUntilTurn('ArrowRight', before);
+    ok(parseInt(back) < parseInt(before), 'ArrowRight did not go back in vertical text');
+    const after = await clickUntilTurn('.edge-l', back);
+    ok(parseInt(after) > parseInt(back), 'the left edge did not go forward');
+  });
+
+  await step('Text direction is not shown for a PDF or a comic', async () => {
+    await backToLibrary();
+    await page.getByRole('button', { name: /^Open sample/i }).first().click();
+    await page.locator('.reader').waitFor();
+    await until(async () => !(await page.locator('.loading').count()), 'pdf to load', 20000);
+    await openSettings();
+    ok((await page.getByRole('heading', { name: 'Text direction' }).count()) === 0, 'Text direction shown for a PDF');
+    await closeSettings();
+    await backToLibrary();
+    await page.getByRole('button', { name: /^Open series Duo Comics/ }).click(); // the comics were added as a series
+    await page.locator('.card-open').first().click();
+    await page.locator('.reader').waitFor();
+    await until(async () => !(await page.locator('.loading').count()), 'comic to load', 20000);
+    await openSettings();
+    ok((await page.getByRole('heading', { name: 'Text direction' }).count()) === 0, 'Text direction shown for a comic');
+    ok(await page.getByRole('heading', { name: 'Comics' }).isVisible(), 'the comics setting is missing');
+    await closeSettings();
+  });
+
+  await step('Text direction at 360px: no sideways scroll, both choices 44px and inside the screen', async () => {
+    await backToLibrary();
+    await page.setViewportSize({ width: 360, height: 740 });
+    await sleep(300);
+    await openFromLibrary('縦書きの本');
+    await openSettings();
+    ok((await overflowX()) <= 0, 'page scrolls horizontally with Settings open at 360');
+    for (const name of ['As in the book', 'Horizontal (left to right)']) {
+      const box = await page.getByRole('button', { name }).boundingBox();
+      ok(box.height >= 43.5 && box.width >= 43.5, `${name} is ${box.width}x${box.height}`);
+      ok(box.x >= 0 && box.x + box.width <= 360, `${name} is outside the screen: ${JSON.stringify(box)}`);
+    }
+    await closeSettings();
+    await page.setViewportSize({ width: 1280, height: 800 });
+  });
+
   fs.rmSync(TMP, { recursive: true, force: true });
 
   const failed = results.filter((r) => !r.ok);

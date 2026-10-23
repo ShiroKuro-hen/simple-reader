@@ -146,6 +146,7 @@ export async function openCbz(blob: Blob, container: HTMLElement, opts: OpenBook
     setAnnotations() {},
     onAnnotationClick() {},
     here: () => ({ location: String(page), text: '', label: `Page ${page}` }),
+    rtl: () => settings.rtl,
     destroy,
   };
 }

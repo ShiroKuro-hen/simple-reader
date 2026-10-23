@@ -13,7 +13,7 @@ const HIDE_AFTER_MS = 3500;
 export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack: () => void): () => void {
   const ac = new AbortController();
   const docs = new Set<Document>(); // rendered EPUB documents, kept so furigana can be re-applied
-  const settings = createSettings(app, { comic: book.format === 'cbz' });
+  const settings = createSettings(app, { comic: book.format === 'cbz', epub: book.format === 'epub' });
   let handle: ReaderHandle | null = null;
   let items: Annotation[] = []; // every highlight, note and bookmark of this book, tombstones included
   let where = { location: '', label: '' }; // the last reported position
@@ -88,8 +88,9 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
     iconButton('settings', 'Reading settings', settings.open));
   const bottom = h('footer', { class: 'bar bar-bottom' }, h('div', { class: 'bar-meta' }, chapter, pct), slider);
 
-  // A right-to-left comic reads the other way, so its left edge goes forward. Read at each use: the setting can change while reading.
-  const flipped = () => book.format === 'cbz' && app.settings.rtl;
+  // Right-to-left pages (comics, vertical Japanese) turn the other way, so the left edge goes forward.
+  // Read at each use: the book's direction is known once it renders, and the setting can change while reading.
+  const flipped = () => handle?.rtl() ?? false;
   const edgeL = h('div', { class: 'edge edge-l', 'aria-hidden': 'true', onclick: () => turn(flipped() ? 1 : -1) });
   const edgeR = h('div', { class: 'edge edge-r', 'aria-hidden': 'true', onclick: () => turn(flipped() ? -1 : 1) });
   function drawEdges() {
@@ -159,19 +160,6 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
     void applyJapanese(doc);
   }
 
-  // A selection over furigana would otherwise include the <rt> readings in its text.
-  function withoutRuby(text: string): string {
-    for (const d of docs) {
-      const s = d.getSelection();
-      if (!s || s.isCollapsed || s.toString().trim() !== text) continue;
-      const box = d.createElement('div');
-      box.append(s.getRangeAt(0).cloneContents());
-      box.querySelectorAll('rt, rp').forEach((n) => n.remove());
-      return box.textContent?.trim() || text;
-    }
-    return text;
-  }
-
   // --- Japanese reading ---
   let japaneseWarned = false;
   async function applyJapanese(doc: Document) {
@@ -194,8 +182,9 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
 
   let mode = app.settings.furigana;
   const unsub = app.subscribe((s) => {
-    handle?.setSettings(s);
     drawEdges();
+    // A book that re-loads for a new writing direction turns its edges over once it is shown again.
+    void Promise.resolve(handle?.setSettings(s)).then(drawEdges, () => {});
     if (s.furigana === mode) return;
     mode = s.furigana;
     if (mode !== 'off') void preloadJapanese();
@@ -286,9 +275,10 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
         const a = items.find((i) => i.id === id && !i.deleted);
         if (a) popup.showAnnotation(a, rect);
       });
-      opened.onSelect((sel) => popup.show({ ...sel, text: withoutRuby(sel.text) }));
+      opened.onSelect((sel) => popup.show(sel)); // readSelection leaves the furigana readings out
       let lastLocation = '';
       opened.onRelocate((p) => {
+        drawEdges(); // a new section may turn the other way (vertical text)
         if (p.location !== lastLocation) popup.hide(); // the reader may repeat a relocate without moving
         lastLocation = p.location;
         chapter.textContent = p.label ?? '';

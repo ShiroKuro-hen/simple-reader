@@ -7,8 +7,15 @@ export const THEMES: Record<Theme, { bg: string; fg: string }> = {
 };
 
 /** CSS injected into every EPUB section document. */
-export function epubCss({ theme, fontSize }: ReaderSettings): string {
+export function epubCss({ theme, fontSize, writing }: ReaderSettings): string {
   const { bg, fg } = THEMES[theme];
+  // 'horizontal' overrides the book's vertical layout. The override must reach every element, because
+  // a book can set writing-mode on its own descendants (e.g. ruby or headings) and those would stay vertical.
+  const horizontal = writing === 'horizontal'
+    ? `html { writing-mode: horizontal-tb !important; -webkit-writing-mode: horizontal-tb !important; direction: ltr !important; text-orientation: mixed !important; }
+       body { writing-mode: horizontal-tb !important; -webkit-writing-mode: horizontal-tb !important; direction: ltr !important; text-orientation: mixed !important; }
+       body * { writing-mode: horizontal-tb !important; -webkit-writing-mode: horizontal-tb !important; text-orientation: mixed !important; }`
+    : '';
   // Light keeps the book's own colours; the other themes override them or dark books stay unreadable.
   const force =
     theme === 'light'
@@ -18,7 +25,8 @@ export function epubCss({ theme, fontSize }: ReaderSettings): string {
   return `
     html { background: ${bg} !important; color: ${fg} !important; ${fontSize === 100 ? '' : `font-size: ${fontSize}% !important;`} }
     body { background: transparent !important; color: ${fg} !important; }
-    ${force}
+    ${force}${horizontal}
     ::selection { background: ${theme === 'dark' ? '#3b5b8a' : '#b3d4fc'}; color: inherit; }
+    rt, rp { user-select: none !important; -webkit-user-select: none !important; }
   `;
 }

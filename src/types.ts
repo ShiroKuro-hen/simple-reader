@@ -81,7 +81,11 @@ export interface ReaderSettings {
   layout: PageLayout;
   /** Comics (cbz) read right to left; ignored by EPUB and PDF. */
   rtl: boolean;
+  /** EPUB only: 'book' keeps the book's own writing direction (vertical Japanese stays vertical); 'horizontal' forces left-to-right text. */
+  writing: TextDirection;
 }
+
+export type TextDirection = 'book' | 'horizontal';
 
 export interface TocItem {
   label: string;
@@ -107,7 +111,8 @@ export interface ReaderHandle {
   /** `fraction` is 0..1. */
   goToFraction(fraction: number): Promise<void>;
   toc: TocItem[];
-  setSettings(settings: ReaderSettings): void;
+  /** Returns a promise when the change re-loads the book's section (EPUB writing direction), which settles once it is shown again. */
+  setSettings(settings: ReaderSettings): void | Promise<void>;
   onSelect(cb: (sel: TextSelection) => void): void;
   onRelocate(cb: (p: { location: string; fraction: number; label?: string }) => void): void;
   /** Draws the highlights and notes of `items` (not bookmarks) on every section, now and as sections load; removes the ones no longer listed. PDFs draw nothing. */
@@ -116,6 +121,8 @@ export interface ReaderHandle {
   onAnnotationClick(cb: (id: string, rect: TextSelection['rect']) => void): void;
   /** The current page as a bookmark anchor: a point location (EPUB CFI / PDF page number), the first words on the page, the chapter or page label. */
   here(): { location: string; text: string; label?: string };
+  /** Whether the page on screen turns right to left: the keys and the edge zones follow it. EPUB: the direction foliate detected for the section; PDF: false; comics: their setting. */
+  rtl(): boolean;
   destroy(): void;
 }
 
