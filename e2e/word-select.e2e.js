@@ -57,6 +57,14 @@ async (page, env = {}) => {
   /** Everything selected in the book frames, as one string. */
   const selected = async () =>
     (await Promise.all(frames().map((f) => f.evaluate(() => document.getSelection()?.toString() ?? '').catch(() => '')))).join('');
+  /** Like `until` for a selection, but a timeout reports what was selected instead (CI diagnosis). */
+  async function untilSelected(expected, what, ms = 8000) {
+    try {
+      await until(async () => (await selected()) === expected, what, ms);
+    } catch (e) {
+      throw new Error(`${e.message} (selected: ${JSON.stringify(await selected())})`);
+    }
+  }
   const popupWord = async () => (await page.locator('.popup:not([hidden]) .pop-word').textContent({ timeout: 8000 })).trim();
 
   /**
@@ -130,7 +138,7 @@ async (page, env = {}) => {
     await turnFuriganaOn();
     const p = await charAt('名前', { index: 1 });
     await page.mouse.click(p.x, p.y);
-    await until(async () => (await selected()) === '名前', 'the word 名前 selected', 40000);
+    await untilSelected('名前', 'the word 名前 selected', 40000);
     eq(await popupWord(), '名前', 'lookup heading');
     await reset();
   });
@@ -138,14 +146,14 @@ async (page, env = {}) => {
   await step('clicking the furigana selects the same word as its base', async () => {
     const p = await charAt('なまえ', { index: 1, reading: true });
     await page.mouse.click(p.x, p.y);
-    await until(async () => (await selected()) === '名前', 'the base word selected', 8000);
+    await untilSelected('名前', 'the base word selected', 8000);
     await reset();
   });
 
   await step('a kana particle is selected when the tokenizer makes it a word; punctuation selects nothing', async () => {
     const particle = await charAt('はまだ', { index: 0 });
     await page.mouse.click(particle.x, particle.y);
-    await until(async () => (await selected()) === 'は', 'the particle selected', 8000);
+    await untilSelected('は', 'the particle selected', 8000);
     await reset();
     const stop = await charAt('。', { index: 0 });
     await page.mouse.click(stop.x, stop.y);
@@ -205,7 +213,7 @@ async (page, env = {}) => {
   await step('tapping an existing highlight still opens the colour menu and selects nothing', async () => {
     const p = await charAt('猫', { index: 0 });
     await page.mouse.click(p.x, p.y);
-    await until(async () => (await selected()) === '猫', 'word for the highlight', 8000);
+    await untilSelected('猫', 'word for the highlight', 8000);
     await page.locator('.popup').getByRole('button', { name: 'Highlight green' }).click();
     await until(async () => (await painted()).length > 0, 'the highlight painted', 8000);
     await reset();
@@ -222,18 +230,18 @@ async (page, env = {}) => {
     await openFromLibrary('縦書きの本');
     const p = await charAt('景色', { index: 1 });
     await page.mouse.click(p.x, p.y);
-    await until(async () => (await selected()) === '景色', 'the word 景色', 40000);
+    await untilSelected('景色', 'the word 景色', 40000);
     await reset();
     const r = await charAt('けしき', { index: 1, reading: true });
     await page.mouse.click(r.x, r.y);
-    await until(async () => (await selected()) === '景色', 'the base word from the reading', 8000);
+    await untilSelected('景色', 'the base word from the reading', 8000);
     await reset();
   });
 
   await step('vertical text: a click on a particle selects it', async () => {
     const p = await charAt('の', { index: 0 });
     await page.mouse.click(p.x, p.y);
-    await until(async () => (await selected()) === 'の', 'の selected', 8000);
+    await untilSelected('の', 'の selected', 8000);
     await reset();
   });
 
@@ -241,7 +249,7 @@ async (page, env = {}) => {
     const before = await chromeHidden();
     const p = await charAt('景色', { index: 1 });
     await page.touchscreen.tap(p.x, p.y);
-    await until(async () => (await selected()) === '景色', 'tap selects 景色', 40000);
+    await untilSelected('景色', 'tap selects 景色', 40000);
     eq(await chromeHidden(), before, 'toolbars after a tap on a word');
     await reset();
     const spot = await until(async () => {
