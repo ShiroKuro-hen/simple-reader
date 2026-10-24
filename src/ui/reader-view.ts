@@ -5,6 +5,7 @@ import { createAnnotationsPanel } from './annotations-panel';
 import { h, icon, iconButton, sheet, toast } from './dom';
 import { createPopup } from './popup';
 import { fractionFromSlider, keyAction, progressLabel, sliderPosition } from './reading';
+import { createSearchPanel } from './search-panel';
 import { createSettings, type App } from './settings';
 import { debounce } from './timing';
 
@@ -77,6 +78,18 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
   const bookmarkBtn = iconButton('bookmark', 'Add bookmark', () => toggleBookmark());
   bookmarkBtn.disabled = true;
   bookmarkBtn.setAttribute('aria-pressed', 'false');
+  const searchPanel = createSearchPanel({
+    run: (query) => handle?.search?.(query),
+    clear: () => handle?.clearSearch?.(),
+    jump: (hit) => handle?.goTo(hit.cfi).catch(() => toast("Couldn't jump there.", 'error')),
+    closed: () => searchBtn?.focus(),
+  });
+  const searchBtn = book.format === 'epub' ? iconButton('search', 'Search in book', () => openSearch()) : null;
+  if (searchBtn) searchBtn.disabled = true;
+  function openSearch() {
+    popup.hide();
+    searchPanel.open();
+  }
   const notesBtn = iconButton('pencil', 'Annotations', () => {
     popup.hide();
     panel.render(items);
@@ -87,6 +100,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
     iconButton('back', 'Back to library', onBack),
     h('h1', { class: 'bar-title' }, book.title),
     bookmarkBtn,
+    searchBtn,
     notesBtn,
     tocBtn,
     iconButton('settings', 'Reading settings', settings.open));
@@ -108,7 +122,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
   const hot = (cls: string) => h('div', { class: `hot ${cls}`, 'aria-hidden': 'true', onpointerdown: showChrome, onpointermove: showChrome });
 
   const view = h('div', { class: 'reader' }, stage, loading, edgeL, edgeR, hot('hot-top'), hot('hot-bottom'), top, bottom);
-  root.replaceChildren(view, settings.el, toc, panel.el);
+  root.replaceChildren(view, settings.el, toc, panel.el, searchPanel.el);
 
   // --- auto-hiding chrome ---
   let hideTimer = 0;
@@ -139,7 +153,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
     const action = keyAction({
       key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey,
       targetTag: (e.target as Element | null)?.tagName, dialogOpen: dialogOpen(), popupOpen: popup.open,
-      rtl: flipped(),
+      rtl: flipped(), searchable: book.format === 'epub' && !!handle,
     });
     if (!action) return;
     if (action === 'show-chrome') return showChrome(); // never swallow Tab
@@ -147,6 +161,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
     if (action === 'next') turn(1);
     else if (action === 'prev') turn(-1);
     else if (action === 'close-popup') popup.hide();
+    else if (action === 'search') openSearch();
     else toggleChrome();
   }
   addEventListener('keydown', onKey, { signal: ac.signal });
@@ -305,6 +320,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
         persist({ bookId: book.id, location: p.location, fraction: p.fraction, updatedAt: Date.now() });
       });
       slider.disabled = false;
+      if (searchBtn) searchBtn.disabled = false;
       if (opened.toc.length) {
         buildToc(opened.toc);
         tocBtn.disabled = false;

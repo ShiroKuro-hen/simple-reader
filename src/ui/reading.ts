@@ -28,7 +28,7 @@ export const MAX_FONT = 220;
 export const stepFontSize = (current: number, direction: 1 | -1) =>
   Math.min(MAX_FONT, Math.max(MIN_FONT, current + direction * 10));
 
-export type KeyAction = 'prev' | 'next' | 'toggle-chrome' | 'show-chrome' | 'close-popup';
+export type KeyAction = 'prev' | 'next' | 'toggle-chrome' | 'show-chrome' | 'close-popup' | 'search';
 
 export interface KeyInfo {
   key: string;
@@ -42,9 +42,12 @@ export interface KeyInfo {
   popupOpen?: boolean;
   /** Right-to-left book: the arrows swap, so ArrowLeft turns forward. */
   rtl?: boolean;
+  /** The book has an in-book search (EPUB): Ctrl+F opens it instead of the browser's find. */
+  searchable?: boolean;
 }
 
 export function keyAction(e: KeyInfo): KeyAction | null {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') return e.searchable && !e.dialogOpen ? 'search' : null;
   if (e.ctrlKey || e.metaKey || e.altKey || e.dialogOpen) return null;
   const tag = e.targetTag;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return null;

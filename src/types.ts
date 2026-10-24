@@ -108,6 +108,17 @@ export interface TextSelection {
   location?: string;
 }
 
+/** One match of an in-book search: the excerpt is the text around it, `match` is the matched text. */
+export interface SearchHit {
+  /** The chapter label the match is in; '' when the book gives none. */
+  chapter: string;
+  /** Where the match is, for `goTo`. */
+  cfi: string;
+  pre: string;
+  match: string;
+  post: string;
+}
+
 export interface ReaderHandle {
   next(): Promise<void>;
   prev(): Promise<void>;
@@ -115,6 +126,10 @@ export interface ReaderHandle {
   /** `fraction` is 0..1. */
   goToFraction(fraction: number): Promise<void>;
   toc: TocItem[];
+  /** EPUB only: finds `query` in every section, yielding the matches in book order. Matches stay highlighted until `clearSearch`. */
+  search?(query: string): AsyncIterable<SearchHit>;
+  /** EPUB only: removes the highlights of the last search. */
+  clearSearch?(): void;
   /** Returns a promise when the change re-loads the book's section (EPUB writing direction), which settles once it is shown again. */
   setSettings(settings: ViewSettings): void | Promise<void>;
   onSelect(cb: (sel: TextSelection) => void): void;

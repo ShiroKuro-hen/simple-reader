@@ -1,6 +1,6 @@
 import '../vendor/foliate-js/view.js';
-import { HIGHLIGHT_FILL, highlightStyle } from '../annotations/paint';
-import type { Annotation, OpenBookOptions, ReaderHandle, ReaderSettings, TextSelection, TocItem } from '../types';
+import { HIGHLIGHT_FILL, SEARCH_FILL, highlightStyle } from '../annotations/paint';
+import type { Annotation, OpenBookOptions, ReaderHandle, ReaderSettings, SearchHit, TextSelection, TocItem } from '../types';
 import { collapse } from '../vendor/foliate-js/epubcfi.js';
 import { Overlayer } from '../vendor/foliate-js/overlayer.js';
 import { loadEpub } from './epub-book';
@@ -165,6 +165,14 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
     goTo: (target) => serial(() => view.goTo(target)),
     goToFraction: (f) => serial(() => view.goToFraction(f)),
     toc: toToc(book.toc),
+    search: async function* (query: string): AsyncGenerator<SearchHit> {
+      // foliate yields a progress tick per section, then the matches of each section that has some, then 'done'.
+      for await (const group of view.search({ query, draw: Overlayer.highlight, drawOptions: { color: SEARCH_FILL } })) {
+        if (group === 'done') return;
+        for (const s of group.subitems ?? []) yield { chapter: group.label, cfi: s.cfi, pre: s.excerpt.pre, match: s.excerpt.match, post: s.excerpt.post };
+      }
+    },
+    clearSearch: () => view.clearSearch(),
     setSettings(s) {
       // Taken before restyling: new writing-mode CSS re-flows the page, and foliate then reports its start instead.
       const place = s.writing === writing ? undefined : placeOnScreen();
@@ -203,6 +211,7 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
       resizes.disconnect();
       selects.clear();
       relocates.clear();
+      view.clearSearch();
       view.close(); // closes the paginator, which revokes section URLs
       book.destroy?.();
       view.remove();
