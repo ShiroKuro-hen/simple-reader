@@ -1,5 +1,6 @@
-// Comic archives (.cbz zip, .cbr rar) of page images, shown one spread at a time. Pages are decoded from the zip
-// only while they are near the current spread, so a long book never sits fully decoded in memory.
+// Comic archives (.cbz zip, .cbr rar) of page images, shown one spread at a time or, with the webtoon setting, as one
+// vertical strip (webtoon.ts). Pages are decoded from the zip only while they are near the current spread or the view,
+// so a long book never sits fully decoded in memory.
 import type { OpenBookOptions, ReaderHandle, ReaderSettings } from '../types';
 import { openComicArchive } from './comic-archive';
 import { displayOrder, pagesToKeep, sortPageNames, spreadOf, stepPage } from './manga-nav';
@@ -7,6 +8,7 @@ import { fractionOfPage, pageFromFraction, parsePage } from './pdf-nav';
 import { replayable } from './selection';
 import { loadUnrarWasm } from './rar-wasm';
 import { THEMES } from './theme';
+import { openStrip, type Strip } from './webtoon';
 
 /** 'auto' shows two pages side by side once the window is at least this many times wider than tall. */
 const SPREAD_RATIO = 1.1;
@@ -37,6 +39,7 @@ export async function openCbz(blob: Blob, container: HTMLElement, opts: OpenBook
   let renderId = 0; // a newer render supersedes older ones still loading
   let destroyed = false;
   const urls = new Map<number, string>(); // object URLs of the decoded window, by page number
+  let strip: Strip | null = null; // the webtoon strip, while that setting is on
 
   /** Two pages side by side only in 'auto' layout and only when the window is wide. */
   const wantsDouble = () =>
@@ -44,8 +47,10 @@ export async function openCbz(blob: Blob, container: HTMLElement, opts: OpenBook
 
   const loadPage = (p: number) => archive.read(names[p - 1]!);
 
+  const report = (p: number) => relocates.emit({ location: String(p), fraction: fractionOfPage(p, total), label: `${p} / ${total}` });
+
   async function render() {
-    if (destroyed) return;
+    if (destroyed || strip) return;
     const id = ++renderId;
     double = wantsDouble();
     page = spreadOf(page, total, double)[0]!;
@@ -86,16 +91,44 @@ export async function openCbz(blob: Blob, container: HTMLElement, opts: OpenBook
     spreadEl.style.cssText = `display:flex;align-items:center;justify-content:center;flex:none;margin:auto;width:${zoom}%;height:${zoom}%`;
     spreadEl.replaceChildren(...imgs);
     root.style.background = THEMES[settings.theme].bg;
-    relocates.emit({ location: String(page), fraction: fractionOfPage(page, total), label: `${page} / ${total}` });
+    report(page);
+  }
+
+  /** Opens the strip at the current page, or closes it and goes back to the spread, when the webtoon setting changes. */
+  function setMode() {
+    if (settings.webtoon && !strip) {
+      renderId++; // a spread still loading must not draw over the strip
+      for (const url of urls.values()) URL.revokeObjectURL(url);
+      urls.clear();
+      spreadEl.remove();
+      strip = openStrip(root, { total, read: loadPage, zoom: settings.fontSize, page, onPage: (p) => { page = p; report(p); } });
+    } else if (!settings.webtoon && strip) {
+      strip.destroy();
+      strip = null;
+      root.append(spreadEl);
+      void render();
+    }
   }
 
   const go = (target: number) => {
     if (destroyed) return Promise.resolve();
+    if (strip) {
+      strip.show(target);
+      return Promise.resolve();
+    }
     const next = spreadOf(target, total, wantsDouble())[0]!;
     if (next === page) return Promise.resolve();
     page = next;
     root.scrollTo(0, 0);
     return render();
+  };
+
+  const turn = (dir: 1 | -1) => {
+    if (strip) {
+      strip.step(dir);
+      return Promise.resolve();
+    }
+    return go(stepPage(page, total, wantsDouble(), dir));
   };
 
   // Resizes fire in bursts; the spread is only redrawn when 'auto' flips between one and two pages.
@@ -114,6 +147,7 @@ export async function openCbz(blob: Blob, container: HTMLElement, opts: OpenBook
     renderId++;
     clearTimeout(resizeTimer);
     ro.disconnect();
+    strip?.destroy();
     for (const url of urls.values()) URL.revokeObjectURL(url);
     urls.clear();
     relocates.clear();
@@ -122,15 +156,16 @@ export async function openCbz(blob: Blob, container: HTMLElement, opts: OpenBook
   }
 
   try {
-    await render();
+    if (settings.webtoon) setMode();
+    else await render();
   } catch (err) {
     destroy();
     throw err;
   }
 
   return {
-    next: () => go(stepPage(page, total, wantsDouble(), 1)),
-    prev: () => go(stepPage(page, total, wantsDouble(), -1)),
+    next: () => turn(1),
+    prev: () => turn(-1),
     goTo: (target) => go(parsePage(target, total)),
     goToFraction: (f) => go(pageFromFraction(f, total)),
     toc: [],
@@ -138,7 +173,9 @@ export async function openCbz(blob: Blob, container: HTMLElement, opts: OpenBook
       const redraw = s.layout !== settings.layout || s.fontSize !== settings.fontSize || s.rtl !== settings.rtl;
       settings = s;
       root.style.background = THEMES[s.theme].bg;
-      if (redraw) void render();
+      if (!!s.webtoon !== !!strip) setMode();
+      else if (strip) strip.zoom(s.fontSize);
+      else if (redraw) void render();
     },
     onSelect() {},
     onRelocate: relocates.on,
@@ -146,7 +183,7 @@ export async function openCbz(blob: Blob, container: HTMLElement, opts: OpenBook
     setAnnotations() {},
     onAnnotationClick() {},
     here: () => ({ location: String(page), text: '', label: `Page ${page}` }),
-    rtl: () => settings.rtl,
+    rtl: () => !strip && settings.rtl, // a strip has no pages to turn over, so nothing flips
     destroy,
   };
 }

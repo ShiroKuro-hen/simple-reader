@@ -10,7 +10,7 @@ import type { BookFormat, ReaderHandle, TextSelection, ViewSettings } from '../.
 import { openComicArchive } from '../comic-archive';
 import { storeRar5 } from '../fixtures/store-rar';
 
-const LIGHT: ViewSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, writing: 'book' };
+const LIGHT: ViewSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, webtoon: false, writing: 'book' };
 
 export interface Session {
   handle: ReaderHandle;

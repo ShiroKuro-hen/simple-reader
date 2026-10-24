@@ -55,10 +55,14 @@ export function createSettings(
   const layoutBtns = LAYOUTS.map(([l, name]) =>
     h('button', { type: 'button', onclick: () => app.update({ layout: l }) }, name),
   );
+  const layoutSection = h('section', {}, h('h3', {}, 'Page layout'), h('div', { class: 'seg', role: 'group', 'aria-label': 'Page layout' }, ...layoutBtns),
+    h('p', { class: 'note' }, 'Auto shows two pages side by side on a wide window. PDFs always show one page.'));
   const modeBtns = MODES.map(([m, name]) =>
     h('button', { type: 'button', onclick: () => app.update({ furigana: m }) }, name),
   );
   const rtlBox = h('input', { type: 'checkbox', onchange: (e: Event) => app.update({ rtl: (e.target as HTMLInputElement).checked }) });
+  const rtlLabel = h('label', {}, rtlBox, ' Right to left');
+  const webtoonBox = h('input', { type: 'checkbox', onchange: (e: Event) => app.update({ webtoon: (e.target as HTMLInputElement).checked }) });
   const writingBtns = WRITINGS.map(([w, name]) =>
     h('button', { type: 'button', onclick: () => opts.writing?.onChange(w) }, name),
   );
@@ -135,10 +139,10 @@ export function createSettings(
       h('div', { class: 'set-head' }, h('h2', {}, 'Settings'), iconButton('close', 'Close settings', () => dlg.close())),
       h('section', {}, h('h3', {}, 'Theme'), h('div', { class: 'swatches' }, ...themeBtns)),
       h('section', {}, h('h3', {}, 'Text size'), h('div', { class: 'size-row' }, smaller, sizeLabel, larger)),
-      h('section', {}, h('h3', {}, 'Page layout'), h('div', { class: 'seg', role: 'group', 'aria-label': 'Page layout' }, ...layoutBtns),
-        h('p', { class: 'note' }, 'Auto shows two pages side by side on a wide window. PDFs always show one page.')),
+      layoutSection,
       h('section', { hidden: !opts.comic }, h('h3', {}, 'Comics'),
-        h('label', {}, rtlBox, ' Right to left')),
+        rtlLabel,
+        h('label', {}, webtoonBox, ' Vertical scroll (webtoon)')),
       h('section', { hidden: !opts.writing }, h('h3', {}, 'Text direction'),
         h('div', { class: 'seg', role: 'group', 'aria-label': 'Text direction' }, ...writingBtns),
         h('p', { class: 'note' }, 'Applies to this book only. Vertical books keep their direction unless you choose horizontal.')),
@@ -165,6 +169,11 @@ export function createSettings(
     LAYOUTS.forEach(([l], i) => layoutBtns[i]!.setAttribute('aria-pressed', String(s.layout === l)));
     MODES.forEach(([m], i) => modeBtns[i]!.setAttribute('aria-pressed', String(s.furigana === m)));
     rtlBox.checked = s.rtl;
+    webtoonBox.checked = s.webtoon;
+    // A webtoon strip has no pages to lay out or turn over, so those settings are hidden for comics.
+    const paged = !(opts.comic && s.webtoon);
+    layoutSection.hidden = !paged;
+    rtlLabel.hidden = !paged;
     sizeLabel.textContent = `${s.fontSize}%`;
     smaller.disabled = s.fontSize <= MIN_FONT;
     larger.disabled = s.fontSize >= MAX_FONT;
