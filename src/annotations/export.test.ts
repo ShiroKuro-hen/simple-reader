@@ -111,6 +111,13 @@ describe('exportMarkdown', () => {
     expect(md.match(/Page \d+/g)).toEqual(['Page 2', 'Page 9', 'Page 10']);
   });
 
+  it('names a PDF highlight by the page the reader showed, never by its raw box location', () => {
+    const pdf = { ...book, format: 'pdf' as const };
+    const md = exportMarkdown(pdf, [item({ location: '3@0.1000,0.2000,0.3000,0.0500', chapter: '3 / 6', text: 'Pages of a book' })]);
+    expect(md).toContain('## 3 / 6\n\n> 🟨 Pages of a book');
+    expect(md).not.toContain('@0.1000');
+  });
+
   it('can state when it was exported', () => {
     expect(exportMarkdown(book, [], { exportedAt: Date.UTC(2026, 9, 22, 23, 59) })).toContain('Exported 2026-10-22');
   });

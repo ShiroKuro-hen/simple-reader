@@ -32,7 +32,7 @@ export interface Annotation {
   id: string;
   bookId: string;
   kind: AnnotationKind;
-  /** EPUB CFI range (highlight/note) or CFI point (bookmark); PDF: page number as a string. */
+  /** EPUB CFI range (highlight/note) or CFI point (bookmark). PDF: a page number (bookmark), or "<page>@x,y,w,h;..." (highlight, see pdf-highlights.ts). */
   location: string;
   /** The highlighted text (or the first words of the page for a bookmark), kept to re-find it and to export. */
   text: string;
@@ -104,7 +104,7 @@ export interface TextSelection {
   context: string;
   /** Selection box in the host page's viewport coordinates, to place the popup. */
   rect: { x: number; y: number; width: number; height: number };
-  /** Where the selection is, as an Annotation.location (EPUB CFI range). Absent in PDFs, which have no highlights in v1. */
+  /** Where the selection is, as an Annotation.location (EPUB CFI range or PDF highlight location). Absent when there is nothing to paint. */
   location?: string;
 }
 
@@ -134,7 +134,7 @@ export interface ReaderHandle {
   setSettings(settings: ViewSettings): void | Promise<void>;
   onSelect(cb: (sel: TextSelection) => void): void;
   onRelocate(cb: (p: { location: string; fraction: number; label?: string }) => void): void;
-  /** Draws the highlights and notes of `items` (not bookmarks) on every section, now and as sections load; removes the ones no longer listed. PDFs draw nothing. */
+  /** Draws the highlights and notes of `items` (not bookmarks) on every section, now and as sections load; removes the ones no longer listed. PDFs draw the current page's. */
   setAnnotations(items: Annotation[]): void;
   /** The user tapped a drawn highlight; `rect` is its box in the host viewport. */
   onAnnotationClick(cb: (id: string, rect: TextSelection['rect']) => void): void;

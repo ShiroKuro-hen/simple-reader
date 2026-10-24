@@ -112,7 +112,7 @@ Taken from [PLAN.md](PLAN.md) (written in Spanish). Checked means it exists toda
 - [ ] Manga: image folders, vertical (webtoon) scroll
 - [x] Right-to-left and vertical EPUB: page-turn keys follow the book, and Settings > Text direction can force horizontal
 - [x] In-book search in EPUB (Ctrl+F): results by chapter, highlighted, tap to jump
-- [x] Highlights, notes and bookmarks in EPUB (PDF: bookmarks only; PDF highlights pending)
+- [x] Highlights, notes and bookmarks in EPUB and PDF
 - [x] Library series: a folder of volumes in your R2 bucket imports as one series (Settings > Import folders)
 - [x] Library: add a whole folder from the device (Add folder): the folder name becomes the series, and you pick EPUB, PDF and/or CBZ
 - [x] PWA with offline support

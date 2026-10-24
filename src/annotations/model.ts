@@ -1,5 +1,6 @@
 // Rules for highlights, notes and bookmarks. Pure: no DOM, no storage, so sync and the CLI can reuse it.
 import type { Annotation, AnnotationFile, AnnotationKind, HighlightColor } from '../types';
+import { pageOfLocation } from '../reader/pdf-highlights';
 import { collapse, compare, parse } from '../vendor/foliate-js/epubcfi.js';
 
 export const COLORS: readonly HighlightColor[] = ['yellow', 'green', 'blue', 'pink'];
@@ -70,7 +71,8 @@ export const putAnnotation = (items: Annotation[], a: Annotation): Annotation[] 
 const isPage = (s: string) => /^\d+$/.test(s);
 
 function key(location: string): { page: number } | { cfi: string } | null {
-  if (isPage(location)) return { page: +location };
+  const page = pageOfLocation(location);
+  if (page !== undefined) return { page };
   try {
     parse(location);
     return { cfi: location };
@@ -79,7 +81,7 @@ function key(location: string): { page: number } | { cfi: string } | null {
   }
 }
 
-/** Reading order: PDF pages numerically, EPUB CFIs by their spine and path (a plain string compare gets /6/10 before /6/4). */
+/** Reading order: PDF pages numerically (a highlight sorts with its page), EPUB CFIs by their spine and path (a plain string compare gets /6/10 before /6/4). */
 function comparePosition(a: string, b: string): number {
   const x = key(a), y = key(b);
   if (!x || !y) return x ? -1 : y ? 1 : a < b ? -1 : a > b ? 1 : 0;
