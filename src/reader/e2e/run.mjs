@@ -992,6 +992,8 @@ const hangProbe = () =>
     r.setEnd(h.firstChild, 1);
     return {
       h1Indent: parseFloat(getComputedStyle(h).textIndent),
+      padTop: parseFloat(getComputedStyle(h).paddingTop),
+      padLeft: parseFloat(getComputedStyle(h).paddingLeft),
       pIndent: parseFloat(getComputedStyle(p).textIndent),
       firstLeft: r.getBoundingClientRect().left,
       h1Left: h.getBoundingClientRect().left,
@@ -1002,22 +1004,24 @@ await test('hanging heading: in book mode the negative indent of the book is lef
   await open('book-ja-hanging.epub', { settings: WRITING('book') });
   const m = await hangProbe();
   assert.ok(m.h1Indent < 0, `the book's own text-indent stays negative, got ${m.h1Indent}`);
+  assert.ok(m.padTop > 0 && m.padLeft === 0, `the book's own spacing stays on top, got ${m.padTop} / ${m.padLeft}`);
 });
 
-await test('hanging heading: in horizontal mode the first character stays inside the column and normal indents survive', async () => {
+await test('hanging heading: in horizontal mode the spacing turns to the line start and the first character stays visible', async () => {
   await open('book-ja-hanging.epub', { settings: WRITING('horizontal') });
   const m = await hangProbe();
-  assert.equal(m.h1Indent, 0, 'the negative indent is removed');
+  assert.equal(m.padTop, 0, 'no gap above the heading');
+  assert.ok(m.padLeft > 0, `the top padding became the line-start padding, got ${m.padLeft}`);
   assert.ok(m.pIndent > 0, `a normal first-line indent is kept, got ${m.pIndent}`);
   assert.ok(m.firstLeft >= m.h1Left - 0.5, `the first character (${m.firstLeft}) is not left of its block (${m.h1Left})`);
 });
 
-await test('hanging heading: switching book -> horizontal live removes the hang, and back restores it', async () => {
+await test('hanging heading: switching book -> horizontal live turns the spacing, and back restores it', async () => {
   await open('book-ja-hanging.epub', { settings: WRITING('book') });
   await setWriting('horizontal');
-  assert.equal((await hangProbe()).h1Indent, 0);
+  assert.equal((await hangProbe()).padTop, 0);
   await setWriting('book');
-  assert.ok((await hangProbe()).h1Indent < 0, 'the own indent of the book is back');
+  assert.ok((await hangProbe()).padTop > 0, 'the own spacing of the book is back');
 });// Opt-in: COMIC_RAR=/path/to/real.cbr runs against a real comic (never committed). The file goes in through the page's file input.
 if (process.env.COMIC_RAR) {
   await test('cbr real file (COMIC_RAR): page 1 renders, next works, and the page count is reported', async () => {

@@ -7,7 +7,7 @@ import { loadEpub } from './epub-book';
 import { pageLayout } from './page-layout';
 import { readSelection, replayable } from './selection';
 import { installWordSelect } from './word-select';
-import { unhangIndents } from './unhang';
+import { designedVertical, turnVerticalSpacing } from './vertical-design';
 import { epubCss } from './theme';
 
 const toToc = (items: any[] = []): TocItem[] =>
@@ -19,9 +19,17 @@ const toToc = (items: any[] = []): TocItem[] =>
  */
 const appliedLayout = new WeakMap<HTMLElement, string>();
 
-function setLayout(renderer: HTMLElement, s: ReaderSettings, stage: HTMLElement, bars: () => { top: number; bottom: number }) {
+function setLayout(renderer: HTMLElement, s: ReaderSettings, stage: HTMLElement, bars: () => { top: number; bottom: number }, vertical: boolean) {
   const { top, bottom } = bars();
-  const g = pageLayout({ width: stage.clientWidth, height: stage.clientHeight, layout: s.layout, topBar: top, bottomBar: bottom });
+  const g = pageLayout({
+    width: stage.clientWidth,
+    height: stage.clientHeight,
+    layout: s.layout,
+    fontSize: s.fontSize,
+    vertical,
+    topBar: top,
+    bottomBar: bottom,
+  });
   // Setting an attribute re-renders the page even when the value is the same: do it only on a real change, or a theme
   // switch (or any settings change) would re-render in the middle of a section re-load and could leave it stuck.
   const key = JSON.stringify(g);
@@ -42,6 +50,7 @@ function setHighlightStyle(view: HTMLElement, s: ReaderSettings) {
 
 export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBookOptions): Promise<ReaderHandle> {
   const book = await loadEpub(blob);
+  const verticalBook = designedVertical(book);
   const view: any = document.createElement('foliate-view');
   view.style.cssText = 'display:block;width:100%;height:100%';
   container.append(view);
@@ -64,7 +73,12 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
 
   const bars = opts.getBars ?? (() => ({ top: 0, bottom: 0 }));
   let settings = opts.settings;
-  const relayout = () => setLayout(view.renderer, settings, container, bars);
+  // Known before a section loads, so the page is sized for it up front rather than re-laid out mid-load.
+  const showsVertical = () => writing === 'book' && verticalBook;
+  const applyLayout = () => setLayout(view.renderer, settings, container, bars, showsVertical());
+  // A layout change re-renders the page; during a page-turn animation that would leave foliate locked for good, so it
+  // waits its turn behind page turns and re-loads.
+  const relayout = () => serial(async () => applyLayout());
   // Window resizes change the column count and the margins: re-lay out once the drag settles.
   let resizeTimer: ReturnType<typeof setTimeout> | undefined;
   const resizes = new ResizeObserver(() => {
@@ -74,7 +88,7 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
 
   await view.open(book);
   view.renderer.setStyles(epubCss(opts.settings));
-  relayout();
+  applyLayout();
   resizes.observe(container);
   setHighlightStyle(view, opts.settings);
 
@@ -100,8 +114,8 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
   });
 
   view.addEventListener('load', ({ detail: { doc, index } }: CustomEvent<{ doc: Document; index: number }>) => {
-    // Before anyone sees the document: forced horizontal, a book's hanging (negative) indents would be cut off.
-    if (writing === 'horizontal') unhangIndents(doc);
+    // Before anyone sees the document: a vertical book read horizontally needs its spacing turned (vertical-design.ts).
+    if (writing === 'horizontal' && verticalBook) turnVerticalSpacing(doc);
     opts.onDocLoad?.(doc);
     installWordSelect(doc, (e) => !!view.renderer.getContents().find((c: any) => c.doc === doc)?.overlayer?.hitTest(e)[0]);
     // Debounced so the popup waits for the drag/handles to settle instead of firing per character.
@@ -123,16 +137,19 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
       return undefined;
     }
   }
-  /** foliate reads the writing direction when a section loads, so a change re-loads the section where the reader is. */
-  function reloadAtPosition(): Promise<void> {
+  /** The first word on screen, as a point: a range would scroll to its far edge and land on another page. */
+  function placeOnScreen() {
+    if (!current) return undefined;
+    const start = current.range?.cloneRange();
+    start?.collapse(true);
+    const { index } = view.resolveNavigation(current.cfi);
+    return view.resolveNavigation(start ? view.getCFI(index, start) : current.cfi);
+  }
+  /** foliate reads the writing direction when a section loads, so a change re-loads the section at `place`. */
+  function reloadAt(place: ReturnType<typeof placeOnScreen>, beforeLoad: () => void): Promise<void> {
     return serial(() => {
-      if (!current) return Promise.resolve();
-      // The first word on screen, as a point: a range CFI would scroll to its far edge and land on another page.
-      const start = current.range?.cloneRange();
-      start?.collapse(true);
-      const { index } = view.resolveNavigation(current.cfi);
-      const target = view.resolveNavigation(start ? view.getCFI(index, start) : current.cfi);
-      return view.renderer.goTo({ ...target, reload: true });
+      beforeLoad();
+      return place ? view.renderer.goTo({ ...place, reload: true }) : Promise.resolve();
     }).then(() => undefined, () => undefined);
   }
   view.addEventListener('relocate', ({ detail: d }: CustomEvent) => {
@@ -149,14 +166,14 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
     goToFraction: (f) => serial(() => view.goToFraction(f)),
     toc: toToc(book.toc),
     setSettings(s) {
+      // Taken before restyling: new writing-mode CSS re-flows the page, and foliate then reports its start instead.
+      const place = s.writing === writing ? undefined : placeOnScreen();
       view.renderer.setStyles(epubCss(s));
       settings = s;
-      relayout();
       setHighlightStyle(view, s);
-      if (s.writing !== writing) {
-        writing = s.writing;
-        return reloadAtPosition(); // resolves once the section is shown again, when its direction is known
-      }
+      if (s.writing === writing) return void relayout();
+      writing = s.writing;
+      return reloadAt(place, applyLayout); // resolves once the section is shown again, when its direction is known
     },
     setAnnotations(items) {
       const next = new Map(items.filter((a) => a.kind !== 'bookmark' && !a.deleted).map((a) => [a.id, a]));

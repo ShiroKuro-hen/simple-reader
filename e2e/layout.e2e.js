@@ -115,9 +115,10 @@ async (page, ctx = {}) => {
           const r = document.querySelector('foliate-view').renderer;
           return { size: r.size, columns: r.heads.length };
         });
+        // Readable lines, not a filled screen: wide windows get more columns, none longer than about 40 em (640 px).
         if (w >= 1920) {
-          ok(page_.size >= 0.8 * w, `the page spans ${Math.round(page_.size)} px of ${w} px`);
-          ok(page_.size / page_.columns <= 900, `a column is ${Math.round(page_.size / page_.columns)} px wide, over the 900 px cap`);
+          ok(page_.columns >= 2, `a wide window shows several columns, got ${page_.columns}`);
+          ok(page_.size / page_.columns <= 660, `a column is ${Math.round(page_.size / page_.columns)} px wide, longer than a comfortable line`);
         }
         if (w >= 2560) ok(page_.columns === 3, `very wide windows get 3 columns, got ${page_.columns}`);
         const textTop = Math.min(...rects.map((r) => r.top));
