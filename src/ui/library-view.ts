@@ -266,7 +266,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
         h('section', { class: 'empty' },
           h('div', { class: 'drop' },
             h('span', { class: 'drop-icon' }, icon('book')),
-            h('h2', {}, 'Drop EPUB or PDF files here'),
+            h('h2', {}, 'Drop EPUB, PDF, CBZ or CBR files here'),
             h('p', {}, 'Your books stay on this device. Nothing is uploaded.'),
             h('button', { class: 'btn primary', type: 'button', onclick: () => input.click() }, 'Choose files'),
             h('p', { class: 'hint' }, 'Already have a backup? ',

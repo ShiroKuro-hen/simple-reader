@@ -135,7 +135,7 @@ async (page, ctx = {}) => {
   await resetApp();
 
   await step('empty library shows the drop zone, no horizontal scroll', async () => {
-    await page.getByRole('heading', { name: 'Drop EPUB or PDF files here' }).waitFor();
+    await page.getByRole('heading', { name: 'Drop EPUB, PDF, CBZ or CBR files here' }).waitFor();
     ok((await overflowX()) <= 0, 'page scrolls horizontally');
     ok((await page.locator('.grid').count()) === 0, 'grid should not exist when empty');
   });
