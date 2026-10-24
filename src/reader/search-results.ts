@@ -1,4 +1,5 @@
 // Rules for the in-book search results. DOM-free.
+import { search as foliateSearch } from '../vendor/foliate-js/search.js';
 import type { SearchHit } from '../types';
 
 /** More rows than this would build thousands of buttons for a common word. */
@@ -51,6 +52,27 @@ function afterMatch(text: string): string {
   const space = cut.lastIndexOf(' ');
   const atWordEnd = text[EXCERPT_CHARS] === ' ' || cut.endsWith(' ');
   return (atWordEnd || space < 0 ? cut : cut.slice(0, space)).trimEnd() + '…';
+}
+
+/** One match in a text: `start` and `end` are its offsets into the text. */
+export interface TextMatch {
+  start: number;
+  end: number;
+  pre: string;
+  match: string;
+  post: string;
+}
+
+/**
+ * The matches of `query` in `text`, in order. Case and accents do not matter. This is foliate's search, the one the EPUB
+ * search runs, so a PDF finds what an EPUB would.
+ */
+export function matchesIn(text: string, query: string): TextMatch[] {
+  const found: TextMatch[] = [];
+  for (const { range, excerpt } of foliateSearch([text], query, { granularity: 'grapheme', sensitivity: 'base' })) {
+    found.push({ start: range.startOffset, end: range.endOffset, ...excerpt });
+  }
+  return found;
 }
 
 /** The match with a short piece of text on each side. Whitespace is collapsed; the space next to the match is kept. */

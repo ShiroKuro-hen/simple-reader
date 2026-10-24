@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SearchHit } from '../types';
-import { capHits, excerptParts, groupByChapter, normalizeQuery } from './search-results';
+import { capHits, excerptParts, groupByChapter, matchesIn, normalizeQuery } from './search-results';
 
 const hit = (chapter: string, match: string): SearchHit => ({ chapter, cfi: `epubcfi(/6/${match})`, pre: '', match, post: '' });
 
@@ -93,5 +93,37 @@ describe('excerptParts', () => {
 
   it('leaves a short side as it is', () => {
     expect(excerptParts({ pre: 'a fox ', match: 'jumps', post: ' over' })).toEqual({ pre: 'a fox ', match: 'jumps', post: ' over' });
+  });
+});
+
+describe('matchesIn', () => {
+  it('finds a match in any case, with its offsets into the text', () => {
+    const text = 'Page 3 heading. The Harbour master';
+    const [m] = matchesIn(text, 'harbour');
+    expect(m).toMatchObject({ match: 'Harbour' });
+    expect(text.slice(m!.start, m!.end)).toBe('Harbour');
+  });
+
+  it('ignores accents: cafe finds café and café finds cafe', () => {
+    expect(matchesIn('a café by the sea', 'cafe').map((m) => m.match)).toEqual(['café']);
+    expect(matchesIn('a cafe by the sea', 'café').map((m) => m.match)).toEqual(['cafe']);
+  });
+
+  it('finds every match, in order', () => {
+    const text = 'harbour, Harbour and harbour again';
+    expect(matchesIn(text, 'harbour').map((m) => m.start)).toEqual([0, 9, 21]);
+  });
+
+  it('gives the text on each side of the match', () => {
+    const [m] = matchesIn('The harbour master counted', 'master');
+    expect(m).toMatchObject({ pre: 'The harbour ', match: 'master', post: ' counted' });
+  });
+
+  it('finds nothing when the text does not have the query', () => {
+    expect(matchesIn('Page 3 heading.', 'zzqx')).toEqual([]);
+  });
+
+  it('finds Japanese text without spaces', () => {
+    expect(matchesIn('吾輩は猫である。名前はまだ無い。', '名前').map((m) => m.start)).toEqual([8]);
   });
 });
