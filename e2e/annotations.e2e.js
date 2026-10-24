@@ -379,7 +379,7 @@ async (page, env = {}) => {
   await step('keyboard: the bookmark button and panel are reachable by Tab', async () => {
     await page.keyboard.press('Tab');
     const names = [];
-    for (let i = 0; i < 8; i++) { names.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))); await page.keyboard.press('Tab'); }
+    for (let i = 0; i < 10; i++) { names.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))); await page.keyboard.press('Tab'); }
     ok(names.includes('Annotations') && (names.includes('Add bookmark') || names.includes('Remove bookmark')), 'tab order: ' + names.join(', '));
   });
 

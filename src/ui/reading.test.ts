@@ -112,6 +112,13 @@ describe('keyAction', () => {
     expect(key('Escape', { rtl: true })).toBe('toggle-chrome');
     expect(key('Tab', { rtl: true })).toBe('show-chrome');
   });
+  it('Ctrl+F or Cmd+F opens the in-book search where there is one, and leaves the browser find elsewhere', () => {
+    expect(key('f', { ctrlKey: true, searchable: true })).toBe('search');
+    expect(key('F', { metaKey: true, searchable: true })).toBe('search');
+    expect(key('f', { ctrlKey: true, searchable: false })).toBeNull();
+    expect(key('f', { ctrlKey: true, searchable: true, dialogOpen: true })).toBeNull();
+    expect(key('f', { ctrlKey: true, searchable: true, targetTag: 'INPUT' })).toBe('search');
+  });
   it('still ignores modified arrows, dialogs and text fields for a right-to-left book', () => {
     expect(key('ArrowLeft', { rtl: true, ctrlKey: true })).toBeNull();
     expect(key('ArrowLeft', { rtl: true, targetTag: 'INPUT' })).toBeNull();
