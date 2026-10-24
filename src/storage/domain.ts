@@ -1,7 +1,7 @@
 // Pure rules of the library: no OPFS, no DOM. Everything here is testable with plain values.
 import type { BookFormat, BookMeta, FuriganaMode, PageLayout, ReaderSettings, Theme } from '../types';
 
-export const DEFAULT_SETTINGS: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true };
+export const DEFAULT_SETTINGS: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, webtoon: false };
 
 /** A book's identity is the SHA-256 of its bytes, so the same file on two devices is one book. */
 export async function sha256Hex(data: ArrayBuffer | Uint8Array): Promise<string> {
@@ -34,5 +34,6 @@ export function mergeSettings(saved: unknown): ReaderSettings {
     furigana: FURIGANA.includes(s.furigana as FuriganaMode) ? (s.furigana as FuriganaMode) : DEFAULT_SETTINGS.furigana,
     layout: LAYOUTS.includes(s.layout as PageLayout) ? (s.layout as PageLayout) : DEFAULT_SETTINGS.layout,
     rtl: typeof s.rtl === 'boolean' ? s.rtl : DEFAULT_SETTINGS.rtl,
+    webtoon: typeof s.webtoon === 'boolean' ? s.webtoon : DEFAULT_SETTINGS.webtoon,
   };
 }

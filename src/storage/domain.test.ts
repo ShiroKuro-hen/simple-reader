@@ -43,16 +43,16 @@ describe('newestFirst', () => {
 
 describe('mergeSettings', () => {
   it('fills the defaults when nothing was saved', () => {
-    expect(mergeSettings(null)).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true });
+    expect(mergeSettings(null)).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, webtoon: false });
   });
   it('keeps valid saved values and fills the missing ones', () => {
-    expect(mergeSettings({ theme: 'dark', fontSize: 140 })).toEqual({ theme: 'dark', fontSize: 140, furigana: 'off', layout: 'auto', rtl: true });
+    expect(mergeSettings({ theme: 'dark', fontSize: 140 })).toEqual({ theme: 'dark', fontSize: 140, furigana: 'off', layout: 'auto', rtl: true, webtoon: false });
   });
   it('remembers the one-page layout', () => {
     expect(mergeSettings({ layout: 'single' }).layout).toBe('single');
   });
   it('replaces garbage from a hand-edited or corrupt file', () => {
-    expect(mergeSettings({ theme: 'neon', fontSize: 'big', furigana: 7, layout: 'triple' })).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true });
+    expect(mergeSettings({ theme: 'neon', fontSize: 'big', furigana: 7, layout: 'triple' })).toEqual({ theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, webtoon: false });
   });
   it('clamps absurd font sizes', () => {
     expect(mergeSettings({ fontSize: 5 }).fontSize).toBe(50);
@@ -71,6 +71,12 @@ describe('mergeSettings', () => {
     expect(mergeSettings({ rtl: undefined }).rtl).toBe(true);
     expect(mergeSettings({ rtl: { on: false } }).rtl).toBe(true);
   });
+  it('keeps a saved webtoon boolean and defaults it to off', () => {
+    expect(mergeSettings({ webtoon: true }).webtoon).toBe(true);
+    expect(mergeSettings({ webtoon: false }).webtoon).toBe(false);
+    expect(mergeSettings({ webtoon: 'yes' }).webtoon).toBe(false);
+    expect(mergeSettings({ rtl: false }).webtoon).toBe(false);
+  });
   it('gives an old settings file without rtl the right-to-left default', () => {
     expect(mergeSettings({ theme: 'dark', fontSize: 120, furigana: 'romaji', layout: 'single' })).toEqual({
       theme: 'dark',
@@ -78,10 +84,11 @@ describe('mergeSettings', () => {
       furigana: 'romaji',
       layout: 'single',
       rtl: true,
+      webtoon: false,
     });
   });
   it('ignores a text direction saved by an older version: it is per book now', () => {
-    expect(mergeSettings({ theme: 'dark', writing: 'horizontal' })).toEqual({ theme: 'dark', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true });
+    expect(mergeSettings({ theme: 'dark', writing: 'horizontal' })).toEqual({ theme: 'dark', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, webtoon: false });
     expect(mergeSettings({ writing: 'horizontal' })).not.toHaveProperty('writing');
   });
 });
