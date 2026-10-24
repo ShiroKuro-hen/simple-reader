@@ -46,6 +46,7 @@ async function createApp(): Promise<App> {
       furigana: saved.furigana ?? 'off',
       layout: saved.layout ?? 'auto',
       rtl: saved.rtl ?? true,
+      webtoon: saved.webtoon ?? false,
     },
     update(patch, remember = true) {
       app.settings = { ...app.settings, ...patch };

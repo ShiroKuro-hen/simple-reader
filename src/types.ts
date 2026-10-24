@@ -83,6 +83,8 @@ export interface ReaderSettings {
   layout: PageLayout;
   /** Comics (cbz) read right to left; ignored by EPUB and PDF. */
   rtl: boolean;
+  /** Comics (cbz) as one continuous vertical strip of pages, for webtoons; ignored by EPUB and PDF. */
+  webtoon: boolean;
 }
 
 /** EPUB only: 'book' keeps the book's own writing direction (vertical Japanese stays vertical); 'horizontal' forces left-to-right text. */
