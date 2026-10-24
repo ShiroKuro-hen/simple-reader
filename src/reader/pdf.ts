@@ -1,8 +1,10 @@
 import 'pdfjs-dist/web/pdf_viewer.css';
-import { HIGHLIGHT_FILL, highlightStyle } from '../annotations/paint';
-import type { Annotation, OpenBookOptions, ReaderHandle, ReaderSettings, TextSelection, TocItem } from '../types';
-import { decodeLocation, encodeLocation, hit, normalizeRects } from './pdf-highlights';
+import { HIGHLIGHT_FILL, SEARCH_FILL, highlightStyle } from '../annotations/paint';
+import type { Annotation, OpenBookOptions, ReaderHandle, ReaderSettings, SearchHit, TextSelection, TocItem } from '../types';
+import { type Box, decodeLocation, encodeLocation, hit, normalizeRects } from './pdf-highlights';
 import { fractionOfPage, pageFromFraction, parsePage } from './pdf-nav';
+import { pageHits, pageText, pieceSpans } from './pdf-search';
+import { matchesIn } from './search-results';
 import { pdfjs } from './pdfjs';
 import { readSelection, replayable } from './selection';
 import { THEMES } from './theme';
@@ -28,9 +30,13 @@ export async function openPdf(blob: Blob, container: HTMLElement, opts: OpenBook
   const marksEl = document.createElement('div');
   marksEl.className = 'sr-highlights';
   marksEl.style.cssText = 'position:absolute;inset:0;pointer-events:none';
+  // The search's matches get their own layer, so clearing one never clears the other.
+  const searchEl = document.createElement('div');
+  searchEl.className = 'sr-search';
+  searchEl.style.cssText = 'position:absolute;inset:0;pointer-events:none';
   const textLayerEl = document.createElement('div');
   textLayerEl.className = 'textLayer';
-  pageEl.append(marksEl, textLayerEl);
+  pageEl.append(marksEl, searchEl, textLayerEl);
   scroller.append(pageEl);
   container.append(scroller);
 
@@ -38,6 +44,8 @@ export async function openPdf(blob: Blob, container: HTMLElement, opts: OpenBook
   const relocates = replayable<{ location: string; fraction: number; label?: string }>();
   let clicks: (id: string, rect: TextSelection['rect']) => void = () => {};
   let marks: Annotation[] = []; // every highlight of the book; only the current page's are drawn
+  let query = ''; // the search whose matches are painted on every page, until it is cleared
+  let matchBoxes: Box[] = []; // the matches of `query` on the current page
   let settings: ReaderSettings = opts.settings;
   let page = parsePage(opts.location, total);
   let canvas: HTMLCanvasElement | undefined;
@@ -59,19 +67,53 @@ export async function openPdf(blob: Blob, container: HTMLElement, opts: OpenBook
       return d && d.page === page ? [{ a, rects: d.rects }] : [];
     });
 
-  /** Boxes are fractions of the page, so they follow zoom and resize without any maths here. */
-  function drawMarks() {
+  /** A tint over one box. Boxes are fractions of the page, so they follow zoom and resize without any maths here. */
+  function boxEl(r: Box, fill: string, className: string, extraCss = '') {
     const { opacity, blend } = highlightStyle(settings.theme);
+    const el = document.createElement('div');
+    el.className = className;
+    el.style.cssText = `position:absolute;box-sizing:border-box;left:${r.x * 100}%;top:${r.y * 100}%;width:${r.w * 100}%;height:${r.h * 100}%;` +
+      `background:${fill};opacity:${opacity};mix-blend-mode:${blend};${extraCss}`;
+    return el;
+  }
+
+  function drawMarks() {
     marksEl.replaceChildren(...onPage().flatMap(({ a, rects }) =>
       rects.map((r) => {
-        const el = document.createElement('div');
-        el.className = a.kind === 'note' ? 'sr-highlight sr-highlight-note' : 'sr-highlight';
         // A note gets a bottom rule, so it reads differently from a plain highlight.
-        const rule = a.kind === 'note' ? `border-bottom:2px solid ${THEMES[settings.theme].fg};` : '';
-        el.style.cssText = `position:absolute;box-sizing:border-box;left:${r.x * 100}%;top:${r.y * 100}%;width:${r.w * 100}%;height:${r.h * 100}%;` +
-          `background:${HIGHLIGHT_FILL[a.color]};opacity:${opacity};mix-blend-mode:${blend};${rule}`;
-        return el;
+        const note = a.kind === 'note';
+        return boxEl(r, HIGHLIGHT_FILL[a.color], note ? 'sr-highlight sr-highlight-note' : 'sr-highlight',
+          note ? `border-bottom:2px solid ${THEMES[settings.theme].fg};` : '');
       })));
+  }
+
+  function drawSearch() {
+    searchEl.replaceChildren(...matchBoxes.map((r) => boxEl(r, SEARCH_FILL, 'sr-search-hit')));
+  }
+
+  /** Boxes the matches of the search, found in the text layer of the page on screen. */
+  function paintSearch() {
+    matchBoxes = [];
+    if (query) {
+      // The same text as the search reads from the page's items, so the matches found here are the ones it counted.
+      const walker = document.createTreeWalker(textLayerEl, NodeFilter.SHOW_TEXT);
+      const nodes: Text[] = [];
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) if ((n as Text).data) nodes.push(n as Text);
+      const text = pageText(nodes.map((n) => n.data));
+      const lengths = nodes.map((n) => n.data.length);
+      const box = pageEl.getBoundingClientRect();
+      for (const m of matchesIn(text, query)) {
+        const spans = pieceSpans(lengths, m.start, m.end);
+        const first = spans[0];
+        const last = spans.at(-1);
+        if (!first || !last) continue;
+        const range = document.createRange();
+        range.setStart(nodes[first.piece]!, first.from);
+        range.setEnd(nodes[last.piece]!, last.to);
+        matchBoxes.push(...normalizeRects(range.getClientRects(), box));
+      }
+    }
+    drawSearch();
   }
 
   /** A tap that ends an empty selection on a highlight opens it; the one drawn last is on top, so it wins. */
@@ -123,11 +165,15 @@ export async function openPdf(blob: Blob, container: HTMLElement, opts: OpenBook
     pageEl.style.setProperty('--scale-factor', String(scale));
     pageEl.style.setProperty('--total-scale-factor', String(scale));
     drawMarks();
+    matchBoxes = []; // the last page's matches must not show over this one
+    drawSearch();
     textLayerEl.replaceChildren();
     const tl = new pdfjs.TextLayer({ textContentSource: p.streamTextContent(), container: textLayerEl, viewport });
     textLayer = tl;
     await tl.render().catch(() => {});
-    if (id === renderId) relocates.emit({ location: String(page), fraction: fractionOfPage(page, total), label: `${page} / ${total}` });
+    if (id !== renderId) return;
+    paintSearch();
+    relocates.emit({ location: String(page), fraction: fractionOfPage(page, total), label: `${page} / ${total}` });
   }
 
   const go = async (n: number) => {
@@ -177,11 +223,28 @@ export async function openPdf(blob: Blob, container: HTMLElement, opts: OpenBook
     goTo: (target) => go(parsePage(target, total)),
     goToFraction: (f) => go(pageFromFraction(f, total)),
     toc,
+    // Pages are read one at a time, in order, so a long book is never held in memory as text; the caller stops reading
+    // once it has enough hits.
+    search: async function* (q: string): AsyncGenerator<SearchHit> {
+      query = q;
+      paintSearch();
+      for (let n = 1; n <= total; n++) {
+        const pdfPage = await pdf.getPage(n);
+        const { items } = await pdfPage.getTextContent();
+        pdfPage.cleanup();
+        yield* pageHits(n, pageText(items.map((i) => ('str' in i ? i.str : ''))), q);
+      }
+    },
+    clearSearch() {
+      query = '';
+      paintSearch();
+    },
     setSettings(s) {
       const rescale = s.fontSize !== settings.fontSize;
       settings = s;
       style();
       drawMarks();
+      drawSearch();
       if (rescale) void render();
     },
     onSelect: selects.on,

@@ -114,7 +114,7 @@ export interface TextSelection {
 export interface SearchHit {
   /** The chapter label the match is in; '' when the book gives none. */
   chapter: string;
-  /** Where the match is, for `goTo`. */
+  /** Where the match is, for `goTo`: an EPUB CFI or a PDF page number. */
   cfi: string;
   pre: string;
   match: string;
@@ -128,9 +128,9 @@ export interface ReaderHandle {
   /** `fraction` is 0..1. */
   goToFraction(fraction: number): Promise<void>;
   toc: TocItem[];
-  /** EPUB only: finds `query` in every section, yielding the matches in book order. Matches stay highlighted until `clearSearch`. */
+  /** EPUB and PDF: finds `query` in every section or page, yielding the matches in book order. Matches stay highlighted until `clearSearch`. */
   search?(query: string): AsyncIterable<SearchHit>;
-  /** EPUB only: removes the highlights of the last search. */
+  /** EPUB and PDF: removes the highlights of the last search. */
   clearSearch?(): void;
   /** Returns a promise when the change re-loads the book's section (EPUB writing direction), which settles once it is shown again. */
   setSettings(settings: ViewSettings): void | Promise<void>;
