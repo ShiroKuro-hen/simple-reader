@@ -17,7 +17,9 @@ export interface BookMeta {
   series?: string;
   /** Shelves/labels chosen by the user, lowercase, trimmed, no duplicates. */
   tags?: string[];
-  /** Set when the user edits the metadata (tags); sync keeps the newest. */
+  /** EPUB text direction chosen for this book; absent means 'book'. */
+  writing?: TextDirection;
+  /** Set when the user edits the metadata (tags or direction); sync keeps the newest. */
   updatedAt?: number;
 }
 
@@ -81,11 +83,13 @@ export interface ReaderSettings {
   layout: PageLayout;
   /** Comics (cbz) read right to left; ignored by EPUB and PDF. */
   rtl: boolean;
-  /** EPUB only: 'book' keeps the book's own writing direction (vertical Japanese stays vertical); 'horizontal' forces left-to-right text. */
-  writing: TextDirection;
 }
 
+/** EPUB only: 'book' keeps the book's own writing direction (vertical Japanese stays vertical); 'horizontal' forces left-to-right text. */
 export type TextDirection = 'book' | 'horizontal';
+
+/** What an open book is rendered with: the global settings plus this book's text direction. */
+export type ViewSettings = ReaderSettings & { writing: TextDirection };
 
 export interface TocItem {
   label: string;
@@ -112,7 +116,7 @@ export interface ReaderHandle {
   goToFraction(fraction: number): Promise<void>;
   toc: TocItem[];
   /** Returns a promise when the change re-loads the book's section (EPUB writing direction), which settles once it is shown again. */
-  setSettings(settings: ReaderSettings): void | Promise<void>;
+  setSettings(settings: ViewSettings): void | Promise<void>;
   onSelect(cb: (sel: TextSelection) => void): void;
   onRelocate(cb: (p: { location: string; fraction: number; label?: string }) => void): void;
   /** Draws the highlights and notes of `items` (not bookmarks) on every section, now and as sections load; removes the ones no longer listed. PDFs draw nothing. */
@@ -127,7 +131,7 @@ export interface ReaderHandle {
 }
 
 export interface OpenBookOptions {
-  settings: ReaderSettings;
+  settings: ViewSettings;
   /** Where to resume. */
   location?: string;
   /** Called with every freshly rendered EPUB document, so lookup can add <ruby>. */

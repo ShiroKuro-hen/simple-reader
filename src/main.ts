@@ -46,7 +46,6 @@ async function createApp(): Promise<App> {
       furigana: saved.furigana ?? 'off',
       layout: saved.layout ?? 'auto',
       rtl: saved.rtl ?? true,
-      writing: saved.writing ?? 'book',
     },
     update(patch, remember = true) {
       app.settings = { ...app.settings, ...patch };

@@ -1,5 +1,5 @@
 import { readAnnotationFile } from '../annotations/model';
-import type { AnnotationFile, BookFormat, BookMeta, Progress, ReaderSettings, Storage } from '../types';
+import type { AnnotationFile, BookFormat, BookMeta, Progress, ReaderSettings, Storage, TextDirection } from '../types';
 import { formatOf, mergeSettings, newestFirst, sha256Hex, titleFromFilename } from './domain';
 import { readCbzInfo } from './cbz-info';
 import { readEpubInfo } from './epub-info';
@@ -126,11 +126,21 @@ export const { addBook, listBooks, getBookBlob, removeBook, saveProgress, getPro
 
 import { cleanTags } from '../library/tags';
 
-/** Replaces a book's tags (cleaned) and stamps `updatedAt`, so sync keeps the newest edit. `fs` and `clock` are injectable for tests. */
-export async function setTags(id: string, tags: string[], fs: Storage = storage, clock: () => number = Date.now): Promise<BookMeta> {
+/** Merges `patch` into a book's metadata and stamps `updatedAt`, so sync keeps the newest edit. */
+async function patchMeta(id: string, patch: Partial<BookMeta>, fs: Storage, clock: () => number): Promise<BookMeta> {
   const data = await fs.read(`meta/${id}.json`);
   if (!data) throw new Error(`Unknown book: ${id}`);
-  const meta: BookMeta = { ...JSON.parse(new TextDecoder().decode(data)), tags: cleanTags(tags), updatedAt: clock() };
+  const meta: BookMeta = { ...JSON.parse(new TextDecoder().decode(data)), ...patch, updatedAt: clock() };
   await fs.write(`meta/${id}.json`, JSON.stringify(meta));
   return meta;
+}
+
+/** Replaces a book's tags (cleaned). `fs` and `clock` are injectable for tests. */
+export function setTags(id: string, tags: string[], fs: Storage = storage, clock: () => number = Date.now): Promise<BookMeta> {
+  return patchMeta(id, { tags: cleanTags(tags) }, fs, clock);
+}
+
+/** The EPUB text direction of one book. 'book' is the default, so it removes the field instead of storing it. */
+export function setWriting(id: string, writing: TextDirection, fs: Storage = storage, clock: () => number = Date.now): Promise<BookMeta> {
+  return patchMeta(id, { writing: writing === 'book' ? undefined : writing }, fs, clock);
 }

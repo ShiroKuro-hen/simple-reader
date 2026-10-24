@@ -729,6 +729,8 @@ async (page, ctx = {}) => {
   };
   const closeSettings = () => page.keyboard.press('Escape');
   const edgeTurn = (side) => page.locator(`.edge-${side}`).getAttribute('data-turn');
+  const pressed = async (name) => (await page.getByRole('button', { name }).getAttribute('aria-pressed')) === 'true';
+  const sectionWritingMode = () => page.evaluate(() => getComputedStyle(document.querySelector('foliate-view').renderer.getContents().at(-1).doc.body).writingMode);
   if (await page.locator('.reader').count()) await backToLibrary();
   await page.setInputFiles('input[type=file]', [FIX + 'book-ja-vertical.epub', FIX + 'sample.pdf', FIX + 'manga.cbz']);
   await until(async () => (await page.getByRole('button', { name: /^Open 縦書きの本/ }).count()) === 1, 'the vertical book in the library', 15000);
@@ -811,6 +813,35 @@ async (page, ctx = {}) => {
     }
     await closeSettings();
     await page.setViewportSize({ width: 1280, height: 800 });
+  });
+
+  await step('Text direction is remembered per book', async () => {
+    await backToLibrary();
+    await seedBooks([['book-en.epub']]); // already there is fine: the same bytes are one book
+    await openFromLibrary('縦書きの本');
+    await openSettings();
+    await page.getByRole('button', { name: 'Horizontal (left to right)' }).click();
+    await closeSettings();
+    await backToLibrary();
+    await openFromLibrary('The Lighthouse');
+    await openSettings();
+    ok(await pressed('As in the book'), 'another book does not start at As in the book');
+    ok(!(await pressed('Horizontal (left to right)')), 'Horizontal leaked into another book');
+    await closeSettings();
+    await backToLibrary();
+    await openFromLibrary('縦書きの本');
+    await until(async () => !(await page.locator('.loading').count()), 'the vertical book to load', 20000);
+    await openSettings();
+    ok(await pressed('Horizontal (left to right)'), 'the vertical book forgot Horizontal');
+    await closeSettings();
+    ok((await sectionWritingMode()) === 'horizontal-tb', 'the section is not horizontal after reopening');
+    await page.reload();
+    await page.locator('.reader').waitFor();
+    await until(async () => !(await page.locator('.loading').count()), 'the book to load after reload', 20000);
+    ok((await sectionWritingMode()) === 'horizontal-tb', 'Horizontal was lost on reload');
+    await openSettings();
+    await page.getByRole('button', { name: 'As in the book' }).click();
+    await closeSettings();
   });
 
   fs.rmSync(TMP, { recursive: true, force: true });

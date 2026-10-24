@@ -18,7 +18,12 @@ interface Analyzer {
  */
 async function createAnalyzer(dicPath: string): Promise<Analyzer> {
   const inNode = !!(globalThis as any).process?.versions?.node;
-  const kuromoji = (await (inNode ? import('kuromoji') : import('kuromoji/build/kuromoji.js'))).default;
+  // The node entry is for the unit tests only: a computed name keeps Vite from shipping it in the app bundle.
+  const nodeEntry = 'kuromoji';
+  const module = inNode
+    ? ((await import(/* @vite-ignore */ nodeEntry)) as typeof import('kuromoji'))
+    : await import('kuromoji/build/kuromoji.js');
+  const kuromoji = module.default;
   let tokenizer: { tokenize(s: string): Token[] };
   return {
     init: () => {

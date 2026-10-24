@@ -1,6 +1,6 @@
 import { bookmarkOn, createAnnotation, editAnnotation, mergeAnnotationFiles, previewText, putAnnotation, removeAnnotation, upsertMark } from '../annotations';
-import type { Annotation, BookMeta, HighlightColor, Progress, ReaderHandle, TextSelection, TocItem } from '../types';
-import { getAnnotations, getBookBlob, getProgress, saveAnnotations, saveProgress } from '../storage/library';
+import type { Annotation, BookMeta, HighlightColor, Progress, ReaderHandle, ReaderSettings, TextDirection, TextSelection, TocItem, ViewSettings } from '../types';
+import { getAnnotations, getBookBlob, getProgress, saveAnnotations, saveProgress, setWriting } from '../storage/library';
 import { createAnnotationsPanel } from './annotations-panel';
 import { h, icon, iconButton, sheet, toast } from './dom';
 import { createPopup } from './popup';
@@ -13,7 +13,11 @@ const HIDE_AFTER_MS = 3500;
 export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack: () => void): () => void {
   const ac = new AbortController();
   const docs = new Set<Document>(); // rendered EPUB documents, kept so furigana can be re-applied
-  const settings = createSettings(app, { comic: book.format === 'cbz', epub: book.format === 'epub' });
+  let direction: TextDirection = book.writing ?? 'book'; // this book's EPUB text direction
+  const settings = createSettings(app, {
+    comic: book.format === 'cbz',
+    writing: book.format === 'epub' ? { value: direction, onChange: changeWriting } : undefined,
+  });
   let handle: ReaderHandle | null = null;
   let items: Annotation[] = []; // every highlight, note and bookmark of this book, tombstones included
   let where = { location: '', label: '' }; // the last reported position
@@ -180,11 +184,22 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
     }
   }
 
+  const viewOf = (s: ReaderSettings): ViewSettings => ({ ...s, writing: direction });
+  // A book that re-loads for a new writing direction turns its edges over once it is shown again.
+  function applyToBook(s: ReaderSettings) {
+    void Promise.resolve(handle?.setSettings(viewOf(s))).then(drawEdges, () => {});
+  }
+  function changeWriting(w: TextDirection) {
+    direction = w;
+    settings.showWriting(w);
+    applyToBook(app.settings);
+    setWriting(book.id, w).catch(() => toast("Couldn't save this book's text direction.", 'error'));
+  }
+
   let mode = app.settings.furigana;
   const unsub = app.subscribe((s) => {
     drawEdges();
-    // A book that re-loads for a new writing direction turns its edges over once it is shown again.
-    void Promise.resolve(handle?.setSettings(s)).then(drawEdges, () => {});
+    applyToBook(s);
     if (s.furigana === mode) return;
     mode = s.furigana;
     if (mode !== 'off') void preloadJapanese();
@@ -262,7 +277,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
       if (disposed) return;
       if (app.settings.furigana !== 'off') void preloadJapanese();
       const opened = await openBook(blob, book.format, stage, {
-        settings: app.settings,
+        settings: viewOf(app.settings),
         location: saved?.location,
         onDocLoad,
         getBars: () => ({ top: top.offsetHeight, bottom: bottom.offsetHeight }),

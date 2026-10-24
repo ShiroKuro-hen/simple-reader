@@ -6,11 +6,11 @@ import * as mangaNav from '../manga-nav';
 import { storageContract } from '../../storage/contract';
 import { createLibrary } from '../../storage/library';
 import { opfsStorage } from '../../storage/opfs';
-import type { BookFormat, ReaderHandle, ReaderSettings, TextSelection } from '../../types';
+import type { BookFormat, ReaderHandle, TextSelection, ViewSettings } from '../../types';
 import { openComicArchive } from '../comic-archive';
 import { storeRar5 } from '../fixtures/store-rar';
 
-const LIGHT: ReaderSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, writing: 'book' };
+const LIGHT: ViewSettings = { theme: 'light', fontSize: 100, furigana: 'off', layout: 'auto', rtl: true, writing: 'book' };
 
 export interface Session {
   handle: ReaderHandle;
@@ -28,7 +28,7 @@ const waitFor = async (cond: () => boolean, what: string, ms = 8000) => {
   }
 };
 
-type Opts = { settings?: ReaderSettings; location?: string };
+type Opts = { settings?: ViewSettings; location?: string };
 
 /** As the library does: the name picks the format, and .cbr is a comic whatever its container (zip or rar). */
 const formatFor = (name: string): BookFormat => (name.endsWith('.pdf') ? 'pdf' : /\.cb[zr]$/.test(name) ? 'cbz' : 'epub');

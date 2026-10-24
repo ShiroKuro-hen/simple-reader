@@ -286,24 +286,8 @@ await test('epub: single-page layout shows one page where auto shows two side by
   await ev(() => { document.getElementById('host').style.width = '1500px'; });
   await open('book-en.epub');
   const twoUp = (await nav('next')).fraction;
-  // A column is "side by side" when its text starts in the right half of the host. Measured on the page on screen,
-  // because one page of a single column now spans the whole window, so it can hold as much text as a spread.
-  const secondColumnShown = () => ev(() => {
-    const host = document.getElementById('host').getBoundingClientRect();
-    const doc = session.docs[0];
-    const frame = doc.defaultView.frameElement.getBoundingClientRect();
-    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-      if (!n.textContent.trim()) continue;
-      const range = doc.createRange();
-      range.selectNodeContents(n);
-      for (const q of range.getClientRects()) {
-        const left = frame.left + q.left;
-        if (q.width > 0 && left > host.left + host.width / 2 && frame.left + q.right <= host.right + 1) return true;
-      }
-    }
-    return false;
-  });
+  // foliate draws one header cell per column of the page: two side by side in a spread, one in single-page mode.
+  const secondColumnShown = () => ev(() => document.querySelector('foliate-view').renderer.heads.length > 1);
   await ev(() => session.handle.goToFraction(0));
   assert.ok(await secondColumnShown(), 'auto shows a second column side by side');
   await ev((s) => session.handle.setSettings(s), THEME('light', 100, 'single'));
@@ -1008,6 +992,8 @@ const hangProbe = () =>
     r.setEnd(h.firstChild, 1);
     return {
       h1Indent: parseFloat(getComputedStyle(h).textIndent),
+      padTop: parseFloat(getComputedStyle(h).paddingTop),
+      padLeft: parseFloat(getComputedStyle(h).paddingLeft),
       pIndent: parseFloat(getComputedStyle(p).textIndent),
       firstLeft: r.getBoundingClientRect().left,
       h1Left: h.getBoundingClientRect().left,
@@ -1018,22 +1004,24 @@ await test('hanging heading: in book mode the negative indent of the book is lef
   await open('book-ja-hanging.epub', { settings: WRITING('book') });
   const m = await hangProbe();
   assert.ok(m.h1Indent < 0, `the book's own text-indent stays negative, got ${m.h1Indent}`);
+  assert.ok(m.padTop > 0 && m.padLeft === 0, `the book's own spacing stays on top, got ${m.padTop} / ${m.padLeft}`);
 });
 
-await test('hanging heading: in horizontal mode the first character stays inside the column and normal indents survive', async () => {
+await test('hanging heading: in horizontal mode the spacing turns to the line start and the first character stays visible', async () => {
   await open('book-ja-hanging.epub', { settings: WRITING('horizontal') });
   const m = await hangProbe();
-  assert.equal(m.h1Indent, 0, 'the negative indent is removed');
+  assert.equal(m.padTop, 0, 'no gap above the heading');
+  assert.ok(m.padLeft > 0, `the top padding became the line-start padding, got ${m.padLeft}`);
   assert.ok(m.pIndent > 0, `a normal first-line indent is kept, got ${m.pIndent}`);
   assert.ok(m.firstLeft >= m.h1Left - 0.5, `the first character (${m.firstLeft}) is not left of its block (${m.h1Left})`);
 });
 
-await test('hanging heading: switching book -> horizontal live removes the hang, and back restores it', async () => {
+await test('hanging heading: switching book -> horizontal live turns the spacing, and back restores it', async () => {
   await open('book-ja-hanging.epub', { settings: WRITING('book') });
   await setWriting('horizontal');
-  assert.equal((await hangProbe()).h1Indent, 0);
+  assert.equal((await hangProbe()).padTop, 0);
   await setWriting('book');
-  assert.ok((await hangProbe()).h1Indent < 0, 'the own indent of the book is back');
+  assert.ok((await hangProbe()).padTop > 0, 'the own spacing of the book is back');
 });// Opt-in: COMIC_RAR=/path/to/real.cbr runs against a real comic (never committed). The file goes in through the page's file input.
 if (process.env.COMIC_RAR) {
   await test('cbr real file (COMIC_RAR): page 1 renders, next works, and the page count is reported', async () => {

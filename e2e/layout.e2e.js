@@ -110,7 +110,17 @@ async (page, ctx = {}) => {
       const top = await bar('.bar-top');
       const bottom = await bar('.bar-bottom');
       if (h >= 560) {
-        if (w >= 1920) ok(extent >= 0.8 * w, `text spans ${Math.round(extent)} px of ${w} px`);
+        // The page, not the text on it: a short chapter may not fill every column of a wide page.
+        const page_ = await page.evaluate(() => {
+          const r = document.querySelector('foliate-view').renderer;
+          return { size: r.size, columns: r.heads.length };
+        });
+        // Readable lines, not a filled screen: wide windows get more columns, none longer than about 40 em (640 px).
+        if (w >= 1920) {
+          ok(page_.columns >= 2, `a wide window shows several columns, got ${page_.columns}`);
+          ok(page_.size / page_.columns <= 660, `a column is ${Math.round(page_.size / page_.columns)} px wide, longer than a comfortable line`);
+        }
+        if (w >= 2560) ok(page_.columns === 3, `very wide windows get 3 columns, got ${page_.columns}`);
         const textTop = Math.min(...rects.map((r) => r.top));
         const textBottom = Math.max(...rects.map((r) => r.bottom));
         ok(textTop >= top.y + top.height - 0.5, `text starts at ${Math.round(textTop)}, under the top bar (ends ${Math.round(top.y + top.height)})`);

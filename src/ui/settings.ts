@@ -35,7 +35,10 @@ const MODES: [FuriganaMode, string][] = [['off', 'Off'], ['furigana', 'Furigana'
 
 const WRITINGS: [TextDirection, string][] = [['book', 'As in the book'], ['horizontal', 'Horizontal (left to right)']];
 
-export function createSettings(app: App, opts: { onRestored?: () => void; comic?: boolean; epub?: boolean } = {}) {
+export function createSettings(
+  app: App,
+  opts: { onRestored?: () => void; comic?: boolean; writing?: { value: TextDirection; onChange: (w: TextDirection) => void } } = {},
+) {
   const dlg = sheet('sheet-settings', 'Settings');
 
   // --- appearance ---
@@ -57,7 +60,7 @@ export function createSettings(app: App, opts: { onRestored?: () => void; comic?
   );
   const rtlBox = h('input', { type: 'checkbox', onchange: (e: Event) => app.update({ rtl: (e.target as HTMLInputElement).checked }) });
   const writingBtns = WRITINGS.map(([w, name]) =>
-    h('button', { type: 'button', onclick: () => app.update({ writing: w }) }, name),
+    h('button', { type: 'button', onclick: () => opts.writing?.onChange(w) }, name),
   );
 
   // --- backup ---
@@ -136,9 +139,9 @@ export function createSettings(app: App, opts: { onRestored?: () => void; comic?
         h('p', { class: 'note' }, 'Auto shows two pages side by side on a wide window. PDFs always show one page.')),
       h('section', { hidden: !opts.comic }, h('h3', {}, 'Comics'),
         h('label', {}, rtlBox, ' Right to left')),
-      h('section', { hidden: !opts.epub }, h('h3', {}, 'Text direction'),
+      h('section', { hidden: !opts.writing }, h('h3', {}, 'Text direction'),
         h('div', { class: 'seg', role: 'group', 'aria-label': 'Text direction' }, ...writingBtns),
-        h('p', { class: 'note' }, 'Vertical books keep their direction unless you choose horizontal.')),
+        h('p', { class: 'note' }, 'Applies to this book only. Vertical books keep their direction unless you choose horizontal.')),
       h('section', {}, h('h3', {}, 'Japanese reading'), h('div', { class: 'seg', role: 'group', 'aria-label': 'Japanese reading' }, ...modeBtns)),
       h('section', {},
         h('h3', {}, 'Backup (Cloudflare R2)'),
@@ -152,12 +155,16 @@ export function createSettings(app: App, opts: { onRestored?: () => void; comic?
     ),
   );
 
+  function showWriting(w: TextDirection) {
+    WRITINGS.forEach(([v], i) => writingBtns[i]!.setAttribute('aria-pressed', String(w === v)));
+  }
+  if (opts.writing) showWriting(opts.writing.value);
+
   function sync(s: ReaderSettings) {
     THEMES.forEach(([t], i) => themeBtns[i]!.setAttribute('aria-pressed', String(s.theme === t)));
     LAYOUTS.forEach(([l], i) => layoutBtns[i]!.setAttribute('aria-pressed', String(s.layout === l)));
     MODES.forEach(([m], i) => modeBtns[i]!.setAttribute('aria-pressed', String(s.furigana === m)));
     rtlBox.checked = s.rtl;
-    WRITINGS.forEach(([w], i) => writingBtns[i]!.setAttribute('aria-pressed', String(s.writing === w)));
     sizeLabel.textContent = `${s.fontSize}%`;
     smaller.disabled = s.fontSize <= MIN_FONT;
     larger.disabled = s.fontSize >= MAX_FONT;
@@ -168,6 +175,7 @@ export function createSettings(app: App, opts: { onRestored?: () => void; comic?
   return {
     el: dlg,
     open: () => dlg.showModal(),
+    showWriting,
     dispose() {
       unsub();
       dlg.remove();

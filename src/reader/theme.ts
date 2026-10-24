@@ -1,4 +1,4 @@
-import type { ReaderSettings, Theme } from '../types';
+import type { Theme, ViewSettings } from '../types';
 
 export const THEMES: Record<Theme, { bg: string; fg: string }> = {
   light: { bg: '#ffffff', fg: '#1a1a1a' },
@@ -7,7 +7,7 @@ export const THEMES: Record<Theme, { bg: string; fg: string }> = {
 };
 
 /** CSS injected into every EPUB section document. */
-export function epubCss({ theme, fontSize, writing }: ReaderSettings): string {
+export function epubCss({ theme, fontSize, writing }: ViewSettings): string {
   const { bg, fg } = THEMES[theme];
   // 'horizontal' overrides the book's vertical layout. The override must reach every element, because
   // a book can set writing-mode on its own descendants (e.g. ruby or headings) and those would stay vertical.

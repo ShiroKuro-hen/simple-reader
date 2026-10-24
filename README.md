@@ -56,7 +56,7 @@ Run the unit tests with `npm test` and the real-browser suites (Chromium via Pla
 
 ## Usage
 
-Open an EPUB or PDF from the library screen (file picker or drag and drop). Select a word or phrase to open the lookup popup. Theme, font size, page layout and furigana mode live in the settings panel. EPUB text fills the window and keeps clear of the toolbars. Your last position in each book is remembered. Select text to highlight it in a colour or add a note; the bookmark button and the annotations panel are in the reader's top bar. PDFs support page bookmarks only for now.
+Open an EPUB or PDF from the library screen (file picker or drag and drop). Select a word or phrase to open the lookup popup. Theme, font size, page layout and furigana mode live in the settings panel. EPUB lines keep a comfortable length (about 40 em, growing with the font size): wide windows show more columns instead of longer lines, and the text keeps clear of the toolbars. Your last position in each book is remembered. Select text to highlight it in a colour or add a note; the bookmark button and the annotations panel are in the reader's top bar. PDFs support page bookmarks only for now.
 
 | Action | Keys |
 |---|---|
@@ -65,7 +65,7 @@ Open an EPUB or PDF from the library screen (file picker or drag and drop). Sele
 | Close the popup / show or hide the toolbars | `Esc` |
 | Show the toolbars | `Tab` (on touch: tap the middle of the page) |
 
-Vertical EPUBs (such as Japanese novels) keep their direction by default: the page-turn keys and the edge clicks follow it, so the left edge goes forward. Settings > Text direction can force horizontal, left-to-right reading.
+Vertical EPUBs (such as Japanese novels) keep their direction by default: the page-turn keys and the edge clicks follow it, so the left edge goes forward. Settings > Text direction can force horizontal, left-to-right reading. The choice is per book and syncs with it.
 
 In Japanese text a click or tap selects the whole word, found with the tokenizer, and furigana readings are never part of a selection; dragging still selects any phrase.
 
