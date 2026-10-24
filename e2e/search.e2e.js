@@ -1,4 +1,4 @@
-// In-book search (EPUB only) through the real app in a real Chromium: real foliate-js search, real book files; nothing mocked.
+// In-book search in EPUB through the real app in a real Chromium: real foliate-js search, real book files; nothing mocked.
 //   node e2e/run-annotations.mjs            # runs this file with the other specs
 // or call the function yourself with a Playwright `page` and `{ BASE, ROOT }`.
 // Matches are checked by the search colour (SEARCH_FILL in src/annotations/paint.ts) and by where they are on screen.
@@ -92,14 +92,14 @@ async (page, env = {}) => {
   await page.setInputFiles('input[type=file]', [FIX + 'book-en.epub', FIX + 'book-ja.epub', FIX + 'sample.pdf', FIX + 'manga.cbz']);
   await until(async () => (await page.locator('.card').count()) === 4, 'four cards');
 
-  await step('the search button is in the top bar of an EPUB, and not in a PDF or a comic', async () => {
+  await step('the search button is in the top bar of an EPUB and a PDF, and not of a comic', async () => {
     await openFromLibrary('The Lighthouse');
     eq(await page.locator('.bar-top').getByRole('button', { name: 'Search in book' }).count(), 1, 'EPUB search buttons');
     await backToLibrary();
     await page.getByRole('button', { name: /^Open Sample PDF/ }).click();
     await page.locator('.reader').waitFor();
     await until(async () => !(await page.locator('.loading').count()), 'pdf to load', 20000);
-    eq(await page.locator('.bar-top').getByRole('button', { name: 'Search in book' }).count(), 0, 'PDF search buttons');
+    eq(await page.locator('.bar-top').getByRole('button', { name: 'Search in book' }).count(), 1, 'PDF search buttons');
     await backToLibrary();
     await page.getByRole('button', { name: /^Open manga/ }).click();
     await page.locator('.reader').waitFor();

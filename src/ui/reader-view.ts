@@ -78,13 +78,14 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
   const bookmarkBtn = iconButton('bookmark', 'Add bookmark', () => toggleBookmark());
   bookmarkBtn.disabled = true;
   bookmarkBtn.setAttribute('aria-pressed', 'false');
+  const searchable = book.format === 'epub' || book.format === 'pdf';
   const searchPanel = createSearchPanel({
     run: (query) => handle?.search?.(query),
     clear: () => handle?.clearSearch?.(),
     jump: (hit) => handle?.goTo(hit.cfi).catch(() => toast("Couldn't jump there.", 'error')),
     closed: () => searchBtn?.focus(),
   });
-  const searchBtn = book.format === 'epub' ? iconButton('search', 'Search in book', () => openSearch()) : null;
+  const searchBtn = searchable ? iconButton('search', 'Search in book', () => openSearch()) : null;
   if (searchBtn) searchBtn.disabled = true;
   function openSearch() {
     popup.hide();
@@ -153,7 +154,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
     const action = keyAction({
       key: e.key, shiftKey: e.shiftKey, ctrlKey: e.ctrlKey, metaKey: e.metaKey, altKey: e.altKey,
       targetTag: (e.target as Element | null)?.tagName, dialogOpen: dialogOpen(), popupOpen: popup.open,
-      rtl: flipped(), searchable: book.format === 'epub' && !!handle,
+      rtl: flipped(), searchable: searchable && !!handle,
     });
     if (!action) return;
     if (action === 'show-chrome') return showChrome(); // never swallow Tab
