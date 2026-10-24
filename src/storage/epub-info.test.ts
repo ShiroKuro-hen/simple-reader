@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fixtureFile } from '../reader/fixtures/load';
-import { parseContainer, parseOpf, readEpubInfo } from './epub-info';
+import { parseContainer, parseOpf, parseSpine, readEpubInfo } from './epub-info';
 
 describe('parseContainer', () => {
   it('finds the package document path', () => {
@@ -42,6 +42,18 @@ describe('parseOpf', () => {
     const info = parseOpf(opf('<dc:title>T</dc:title>', '<item id="c0" href="c0.xhtml" media-type="application/xhtml+xml"/>'), 'x.opf');
     expect(info.coverPath).toBeUndefined();
     expect(info.author).toBeUndefined();
+  });
+});
+
+describe('parseSpine', () => {
+  it('lists the reading documents in spine order, resolved against the OPF folder', () => {
+    const opf = '<package><manifest><item id="b" href="c1.xhtml"/><item id="a" href="text/c%30.xhtml"/></manifest>' +
+      '<spine><itemref idref="a"/><itemref idref="b"/></spine></package>';
+    expect(parseSpine(opf, 'OEBPS/content.opf')).toEqual(['OEBPS/text/c0.xhtml', 'OEBPS/c1.xhtml']);
+  });
+  it('skips a spine item that the manifest does not list', () => {
+    const opf = '<package><manifest><item id="a" href="a.xhtml"/></manifest><spine><itemref idref="x"/><itemref idref="a"/></spine></package>';
+    expect(parseSpine(opf, 'content.opf')).toEqual(['a.xhtml']);
   });
 });
 

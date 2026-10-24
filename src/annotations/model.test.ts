@@ -134,6 +134,25 @@ describe('listAnnotations', () => {
     expect(listAnnotations(items).map((i) => i.location)).toEqual(['1', '2', '9', '10']);
   });
 
+  it('sorts a PDF highlight with its page, after the bookmarks of earlier pages', () => {
+    const hl = (id: string, location: string, createdAt = 1000) => make({ id, location, createdAt });
+    const items = [
+      hl('p10', '10@0.1000,0.1000,0.2000,0.0500'),
+      make({ id: 'bm9', location: '9', kind: 'bookmark' }),
+      hl('p2', '2@0.1000,0.1000,0.2000,0.0500'),
+    ];
+    expect(listAnnotations(items).map((i) => i.id)).toEqual(['p2', 'bm9', 'p10']);
+  });
+
+  it('breaks ties between a highlight and a bookmark on the same page by creation time, not by the location text', () => {
+    const items = [
+      make({ id: 'bm', location: '3', kind: 'bookmark', createdAt: 2000 }),
+      make({ id: 'early', location: '3@0.1000,0.1000,0.2000,0.0500', createdAt: 1000 }),
+    ];
+    expect(listAnnotations(items).map((i) => i.id)).toEqual(['early', 'bm']);
+    expect(listAnnotations([...items].reverse()).map((i) => i.id)).toEqual(['early', 'bm']);
+  });
+
   it('survives a location it cannot parse', () => {
     const items = [make({ id: 'x', location: 'garbage' }), make({ id: 'a', location: A })];
     expect(listAnnotations(items)).toHaveLength(2);

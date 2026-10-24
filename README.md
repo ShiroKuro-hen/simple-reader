@@ -30,8 +30,8 @@ Most readers either do a lot and get in the way, or do little and send your libr
 - **Select any word to look it up:** definition and Spanish translation in a popup.
 - **Japanese support:** hiragana reading and romaji on select, plus a furigana-over-kanji mode.
 - **Local-first:** books are files on your device (browser OPFS). No account, no database.
-- **Highlights, notes and bookmarks:** four highlight colours and notes on EPUB text, page bookmarks in EPUB and PDF, a side panel to browse and jump, and export to Markdown (with a copy button) for your notes app.
-- **Library:** search by title, author, series or tag (accent-insensitive, Japanese-safe), tags, sorting, recently read, and series shown as one card with their volumes inside.
+- **Highlights, notes and bookmarks:** four highlight colours and notes on EPUB and PDF text, page bookmarks, a side panel to browse and jump, and export to Markdown (with a copy button) for your notes app.
+- **Library:** search by title, author, series or category (accent-insensitive, Japanese-safe), your own categories (they vanish when empty), favorites, a "Continue reading" shelf, sorting, and series shown as one card with their volumes inside. "Search inside books" looks through the text of every EPUB and PDF (the text is cached on your device).
 - **Optional backup/sync** to your own free Cloudflare R2 bucket. It never deletes anything; the newest reading progress wins and highlights are merged one by one, so two devices never lose each other's notes.
 - **Installable and offline:** a PWA that opens without a connection once visited. Japanese reading works offline after the first Japanese lookup.
 - **Runs as a web app** in the browser, with Windows and Android builds produced by CI (see below).
@@ -56,7 +56,7 @@ Run the unit tests with `npm test` and the real-browser suites (Chromium via Pla
 
 ## Usage
 
-Open an EPUB or PDF from the library screen (file picker or drag and drop). Select a word or phrase to open the lookup popup. Theme, font size, page layout and furigana mode live in the settings panel. EPUB lines keep a comfortable length (about 40 em, growing with the font size): wide windows show more columns instead of longer lines, and the text keeps clear of the toolbars. Your last position in each book is remembered. Select text to highlight it in a colour or add a note; the bookmark button and the annotations panel are in the reader's top bar. PDFs support page bookmarks only for now.
+Open an EPUB or PDF from the library screen (file picker or drag and drop). Select a word or phrase to open the lookup popup. Theme, font size, page layout and furigana mode live in the settings panel. EPUB lines keep a comfortable length (about 40 em, growing with the font size): wide windows show more columns instead of longer lines, and the text keeps clear of the toolbars. Your last position in each book is remembered. Select text to highlight it in a colour or add a note; the bookmark button and the annotations panel are in the reader's top bar. Search the whole book from the magnifier in the top bar or with `Ctrl+F` (EPUB and PDF; PDF results are grouped by page).
 
 | Action | Keys |
 |---|---|
@@ -107,16 +107,17 @@ Taken from [PLAN.md](PLAN.md) (written in Spanish). Checked means it exists toda
 - [x] Open EPUB and PDF, paginated reading, themes, font size, remember position
 - [x] Word lookup with Spanish translation, Japanese reading, romaji and furigana
 - [x] Optional R2 backup and sync
-- [x] Library search, tags and sorting
+- [x] Library search, categories, favorites, recents, sorting, and search inside all books
 - [x] Manga (CBZ and CBR): right-to-left, double page, zoom, page preloading
-- [ ] Manga: image folders, vertical (webtoon) scroll
+- [x] Manga: folders of images become CBZ volumes (Add folder), and a vertical (webtoon) scroll mode
 - [x] Right-to-left and vertical EPUB: page-turn keys follow the book, and Settings > Text direction can force horizontal
-- [ ] In-book search
-- [x] Highlights, notes and bookmarks in EPUB (PDF: bookmarks only; PDF highlights pending)
+- [x] In-book search in EPUB (Ctrl+F): results by chapter, highlighted, tap to jump
+- [x] Highlights, notes and bookmarks in EPUB and PDF
 - [x] Library series: a folder of volumes in your R2 bucket imports as one series (Settings > Import folders)
 - [x] Library: add a whole folder from the device (Add folder): the folder name becomes the series, and you pick EPUB, PDF and/or CBZ
 - [x] PWA with offline support
-- [ ] Desktop and Android: CI builds exist; test on real devices, sign releases, check lookups under the native origin
+- [x] Windows: double-click or "Open with" imports the book (EPUB, PDF, CBZ, CBR)
+- [ ] Android: sign releases with the fixed key (see docs/DESKTOP-AND-ANDROID.md), test on a real phone
 - [ ] Optional: custom CSS and remappable keys, user dictionary
 
 Out of scope on purpose: local API, CLI, rules, plugins, TTS, OCR, OPDS, extra sync backends.

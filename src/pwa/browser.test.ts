@@ -85,7 +85,7 @@ describe.skipIf(!pw)('installable offline app in a real browser', { timeout: 120
   }
 
   async function openBook(title: string) {
-    await page.locator(`button.card-open[aria-label^="Open ${title}"]`).click();
+    await page.locator(`.grid button.card-open[aria-label^="Open ${title}"]`).click(); // the grid, not the "Continue reading" shelf
     await page.locator('.reader').waitFor();
     await expect.poll(async () => (await page.locator('.chapter').first().textContent())?.trim(), { timeout: 20_000 }).toBeTruthy();
   }

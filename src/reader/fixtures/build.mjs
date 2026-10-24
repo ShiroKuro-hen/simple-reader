@@ -114,7 +114,7 @@ ${cover ? '<meta name="cover" content="cover-img"/>' : ''}
       `<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="${lang}"><head><title>${esc(c.title)}</title>${css ? '<link rel="stylesheet" type="text/css" href="style.css"/>' : ''}</head><body>
 <h1>${esc(c.title)}</h1>
-${c.paragraphs.map((p) => `<p>${paraHtml(p)}</p>`).join('\n')}
+${c.bodyHtml ?? c.paragraphs.map((p) => `<p>${paraHtml(p)}</p>`).join('\n')}
 </body></html>`,
     );
   if (cover) await add('OEBPS/cover.png', cover);
@@ -294,6 +294,42 @@ out(
         paragraphs: Array.from({ length: 12 }, (_, i) => ({
           html: `${i + 1}つ目の${ruby('景色', 'けしき')}。${ruby('窓', 'まど')}の外では${ruby('雨', 'あめ')}が降り続いていた。`,
         })),
+      },
+    ],
+  }),
+);
+
+// ---- Vertical Japanese EPUB with a table of contents built from nested hanging blocks ------------------------------
+// Like the Kusuriya novels: each group of entries is a div with a hanging indent that its paragraphs inherit
+// (`p { text-indent: inherit }`); the div, not the paragraph, owns the padding that makes the indent hang. Links use
+// `text-decoration: overline`, which sits beside vertical text like an underline.
+const tocGroup = (cls, entries) =>
+  `<div class="${cls}">${entries.map((e) => `<p><a class="ov" href="c0.xhtml">${esc(e)}</a></p>`).join('')}</div>`;
+out(
+  'book-ja-toc.epub',
+  await epub({
+    id: 'urn:uuid:55555555-5555-5555-5555-555555555555',
+    title: '目次の本',
+    author: '山田花子',
+    lang: 'ja',
+    cover: null,
+    css: [
+      'html, body { writing-mode: vertical-rl; }',
+      'p { display: block; margin: 0; padding: 0; text-indent: inherit; }',
+      '.h3 { text-indent: -3em; padding: 3em 0 0; }',
+      '.h4 { text-indent: -4em; padding: 4em 0 0; }',
+      '.h5 { text-indent: -5em; padding: 5em 0 0; }',
+      '.ov { text-decoration: overline; }',
+    ].join('\n'),
+    progression: 'rtl',
+    chapters: [
+      {
+        title: '目次',
+        bodyHtml: [
+          tocGroup('h3', ['一話　猫猫', '二話　二人の妃', '三話　壬氏']),
+          tocGroup('h4', ['十一話　幽霊騒動', '十二話　恫喝', '十三話　看病']),
+          tocGroup('h5', ['二十一話　李白', '二十二話　里帰り', '二十三話　麦稈']),
+        ].join('\n'),
       },
     ],
   }),

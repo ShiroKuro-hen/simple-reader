@@ -3,6 +3,7 @@
 import { addBook } from '../storage/library';
 import { toast } from '../ui/dom';
 import { planIncoming, type Incoming } from './intake';
+import { oneAtATime } from './one-at-a-time';
 
 type Bridge = { list(): string; read(id: number, max: number): string | null; close(id: number): void };
 declare global {
@@ -33,9 +34,6 @@ async function fetchFile(b: Bridge, id: number, name: string, type: string): Pro
 export function listenForIncoming(showLibrary: () => void): void {
   const bridge = window.SRIntent;
   if (!bridge) return;
-  let busy = false;
-  let again = false;
-
   async function importPending() {
     const items = JSON.parse(bridge!.list()) as Incoming[];
     if (!items.length) return;
@@ -57,17 +55,6 @@ export function listenForIncoming(showLibrary: () => void): void {
   }
 
   // One import at a time; a second intent that arrives meanwhile is picked up by the next round.
-  window.__srIncoming = async function drain() {
-    if (busy) return void (again = true);
-    busy = true;
-    try {
-      do {
-        again = false;
-        await importPending();
-      } while (again);
-    } finally {
-      busy = false;
-    }
-  };
+  window.__srIncoming = oneAtATime(importPending);
   window.__srIncoming(); // a cold start: the file arrived before this page did
 }

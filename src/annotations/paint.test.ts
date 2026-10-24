@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { THEMES } from '../reader/theme';
 import { COLORS } from './model';
-import { HIGHLIGHT_FILL, highlightStyle } from './paint';
+import { HIGHLIGHT_FILL, SEARCH_FILL, highlightStyle } from './paint';
+
+const FILLS = { ...HIGHLIGHT_FILL, search: SEARCH_FILL };
 
 const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
 const lum = (c: number[]) => {
@@ -26,17 +28,17 @@ describe('highlight paint', () => {
     expect(new Set(Object.values(HIGHLIGHT_FILL)).size).toBe(COLORS.length);
   });
 
-  it.each(Object.entries(THEMES))('keeps text readable (WCAG AA, 4.5:1) in the %s theme for every colour', (name, { bg, fg }) => {
+  it.each(Object.entries(THEMES))('keeps text readable (WCAG AA, 4.5:1) in the %s theme for every colour and search matches', (name, { bg, fg }) => {
     const style = highlightStyle(name as keyof typeof THEMES);
-    for (const color of COLORS) {
-      const fill = rgb(HIGHLIGHT_FILL[color]);
+    for (const [color, hex] of Object.entries(FILLS)) {
+      const fill = rgb(hex);
       expect(contrast(tinted(rgb(fg), fill, style), tinted(rgb(bg), fill, style)), color).toBeGreaterThanOrEqual(4.5);
     }
   });
 
   it.each(Object.entries(THEMES))('is clearly visible against the plain page in the %s theme', (name, { bg }) => {
     const style = highlightStyle(name as keyof typeof THEMES);
-    for (const color of COLORS)
-      expect(contrast(tinted(rgb(bg), rgb(HIGHLIGHT_FILL[color]), style), rgb(bg)), color).toBeGreaterThanOrEqual(1.2);
+    for (const [color, hex] of Object.entries(FILLS))
+      expect(contrast(tinted(rgb(bg), rgb(hex), style), rgb(bg)), color).toBeGreaterThanOrEqual(1.2);
   });
 });

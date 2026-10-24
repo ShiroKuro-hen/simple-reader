@@ -7,6 +7,9 @@ export const HIGHLIGHT_FILL: Record<HighlightColor, string> = {
   pink: '#ff8fc2',
 };
 
+/** In-book search matches: orange, so they never look like a highlight the reader made. */
+export const SEARCH_FILL = '#ff9f1c';
+
 /**
  * How the overlay is composited over the page. Multiply keeps dark text dark on light paper; on a dark page
  * multiply would swallow the light text, so a plain translucent tint is used. paint.test.ts checks the contrast.

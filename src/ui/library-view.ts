@@ -1,31 +1,41 @@
 import type { BookFormat, BookMeta, Progress } from '../types';
-import { chooseFormats, planFolderImport, seriesNameFor, type FolderPlan } from '../library/folder-import';
+import { chooseFormats, packVolume, planFolderImport, seriesNameFor, type FolderPlan, type ImageVolume } from '../library/folder-import';
+import { setPendingFind } from '../library/pending-find';
+import { recentBooks } from '../library/recent';
+import { fold } from '../library/search';
 import { parseSortKey, SORT_KEYS, type SortKey } from '../library/sort';
-import { addTag, cleanTags, MAX_TAG_LENGTH, MAX_TAGS, removeTag, tagCounts, type AddResult } from '../library/tags';
+import { type BookHit, rankHits, scanBooks, type ScanStep } from '../library/text-search';
+import { addTag, cleanTags, FAVORITES, isFavorite, liveSelection, MAX_TAG_LENGTH, MAX_TAGS, removeTag, tagCounts, toggleFavorite, type AddResult } from '../library/tags';
 import { countLabel, libraryView } from '../library/view';
 import type { InstallPrompt } from '../pwa/install';
-import { addBook, getProgress, listBooks, removeBook, setTags } from '../storage/library';
+import { excerptParts } from '../reader/search-results';
+import { addBook, getBookText, getProgress, listBooks, removeBook, setTags } from '../storage/library';
 import { coverInitial, titleHue } from './cover';
 import { h, icon, iconButton, sheet, toast } from './dom';
 import type { Entry } from '../library/series';
 import { libIcon } from './library-icons';
 import { bookLabel } from './reading';
 import { createSettings, type App } from './settings';
+import { debounce } from './timing';
 
 type SeriesEntry = Extract<Entry, { kind: 'series' }>;
+/** One thing to add: a picked file, or a comic packed from a folder of images (packed only when its turn comes). */
+type Item = { name: string; load: () => File | Promise<File> };
 
 const FORMAT_NAMES: Record<BookFormat, string> = { epub: 'EPUB', pdf: 'PDF', cbz: 'Comics (CBZ/CBR)' };
 
 const isBook = (f: File) => /\.(epub|pdf|cbz|cbr)$/i.test(f.name) || /^application\/(epub\+zip|pdf|vnd\.comicbook\+zip|vnd\.comicbook-rar|x-cbz|x-cbr)$/.test(f.type);
+const fileItem = (f: File): Item => ({ name: f.name, load: () => f });
+const volumeItem = (v: ImageVolume, files: readonly File[]): Item => ({ name: `${v.name}.cbz`, load: () => packVolume(v, files) });
 
 const SORT_KEY = 'sr.sort';
 const SORT_LABELS: Record<SortKey, string> = { added: 'Recently added', title: 'Title', author: 'Author', read: 'Recently read' };
 const TAG_ERRORS: Record<Extract<AddResult, { ok: false }>['reason'], string> = {
-  empty: 'Type a tag first.',
-  'too-long': `Tags can be up to ${MAX_TAG_LENGTH} characters.`,
-  invalid: 'That tag has characters that are not allowed.',
-  duplicate: 'That tag is already on this book.',
-  'too-many': `A book can have up to ${MAX_TAGS} tags.`,
+  empty: 'Type a category first.',
+  'too-long': `Categories can be up to ${MAX_TAG_LENGTH} characters.`,
+  invalid: 'That category has characters that are not allowed.',
+  duplicate: 'That category is already on this book.',
+  'too-many': `A book can have up to ${MAX_TAGS} categories.`,
 };
 
 function storedSort(): SortKey {
@@ -47,6 +57,12 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   let sort = storedSort();
   /** Lower-cased name of the series whose volumes are listed; session only, never stored. */
   let openSeries: string | null = null;
+  /** "Search inside books" is on: the search box then looks in the text of EPUB and PDF books. Session only. */
+  let finding = false;
+  /** Each scan takes a number; a scan whose number is no longer the current one stops. */
+  let scanId = 0;
+  /** Progress and matches of the scan for the current query; null until one has started. */
+  let scan: ScanStep | null = null;
 
   const input = h('input', {
     type: 'file', accept: '.epub,.pdf,.cbz,.cbr,application/epub+zip,application/pdf,application/vnd.comicbook+zip,application/vnd.comicbook-rar,application/x-cbr', multiple: true, hidden: true,
@@ -66,10 +82,10 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   syncInstall();
   const unsubInstall = install?.subscribe(syncInstall);
 
-  // Search, sort, tag chips and the count are created once so typing never loses focus; render() only refills them.
-  const search = h('input', { class: 'search-input', type: 'search', placeholder: 'Search title, author or tag', 'aria-label': 'Search your library',
+  // Search, sort, category chips and the count are created once so typing never loses focus; render() only refills them.
+  const search = h('input', { class: 'search-input', type: 'search', placeholder: 'Search title, author or category', 'aria-label': 'Search your library',
     autocomplete: 'off', spellcheck: 'false',
-    oninput: () => { query = search.value; render(); } });
+    oninput: () => { query = search.value; if (finding) { stopScan(); scheduleScan(); } render(); } });
   const sortSel = h('select', { class: 'sort-select', 'aria-label': 'Sort by',
     onchange: () => {
       sort = parseSortKey(sortSel.value);
@@ -77,9 +93,12 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
       render();
     } }, ...SORT_KEYS.map((k) => h('option', { value: k }, SORT_LABELS[k])));
   sortSel.value = sort;
+  const findBtn = h('button', { class: 'btn find-toggle', type: 'button', 'aria-pressed': 'false', onclick: () => toggleFinding() },
+    icon('book'), 'Search inside books');
+  const sortLabel = h('label', { class: 'sort' }, sortSel);
   const tools = h('div', { class: 'lib-tools', hidden: true },
-    h('label', { class: 'search' }, libIcon('search'), search), h('label', { class: 'sort' }, sortSel));
-  const chips = h('div', { class: 'tag-chips', role: 'group', 'aria-label': 'Filter by tag', hidden: true });
+    h('label', { class: 'search' }, libIcon('search'), search), findBtn, sortLabel);
+  const chips = h('div', { class: 'tag-chips', role: 'group', 'aria-label': 'Filter by category', hidden: true });
   const count = h('p', { class: 'lib-count', role: 'status', 'aria-live': 'polite', hidden: true });
   const results = h('div', { class: 'lib-results' });
   const main = h('main', { class: 'lib-main' }, tools, chips, count, results);
@@ -110,18 +129,18 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     void addFiles([...(e.dataTransfer?.files ?? [])]);
   });
 
-  /** Adds files one by one behind the busy "Add books" button; a failing file is reported and the rest still go in. */
-  async function addBooks(files: File[], series?: string): Promise<number> {
+  /** Adds items one by one behind the busy "Add books" button; a failing item is reported and the rest still go in. */
+  async function addBooks(items: Item[], series?: string): Promise<number> {
     addBtn.disabled = true;
     let added = 0;
     try {
-      for (const [i, f] of files.entries()) {
-        addLabel.textContent = series ? `Adding ${i + 1} of ${files.length}...` : 'Adding...';
+      for (const [i, item] of items.entries()) {
+        addLabel.textContent = series ? `Adding ${i + 1} of ${items.length}...` : 'Adding...';
         try {
-          await addBook(f, series ? { series } : {});
+          await addBook(await item.load(), series ? { series } : {});
           added++;
         } catch {
-          toast(`Couldn't add "${f.name}". The file may be damaged.`, 'error');
+          toast(`Couldn't add "${item.name}". The file may be damaged.`, 'error');
         }
       }
     } finally {
@@ -135,7 +154,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     const ok = files.filter(isBook);
     if (files.length > ok.length) toast(ok.length ? `Skipped ${files.length - ok.length} unsupported file(s).` : 'Only EPUB, PDF, CBZ and CBR files are supported.', 'error');
     if (!ok.length) return;
-    const added = await addBooks(ok);
+    const added = await addBooks(ok.map(fileItem));
     if (added) toast(`Added ${added} book${added === 1 ? '' : 's'}`);
     await refresh();
   }
@@ -147,8 +166,8 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
         const files = [...(picker.files ?? [])];
         picker.remove();
         const plan = planFolderImport(files.map((f) => f.webkitRelativePath));
-        if (!plan.books.length) {
-          toast('No EPUB, PDF, CBZ or CBR files in that folder.', 'error');
+        if (!plan.books.length && !plan.volumes.length) {
+          toast('No EPUB, PDF, CBZ, CBR or image files in that folder.', 'error');
           return;
         }
         openFolderDialog(files, plan);
@@ -158,7 +177,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     picker.click();
   }
 
-  /** Names the series after the folder and picks the formats; nothing is added until "Add" is pressed. */
+  /** Names the series after the folder and picks what to add; nothing is added until "Add" is pressed. */
   function openFolderDialog(files: File[], plan: FolderPlan) {
     const folder = plan.folder;
     const dlg = sheet('folder-sheet', `Add folder "${folder}"`);
@@ -173,14 +192,19 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
       box.addEventListener('change', update);
       return { format, box, label: h('label', { class: 'folder-format' }, box, `${FORMAT_NAMES[format]} (${plan.counts[format]})`) };
     });
+    const images = h('input', { type: 'checkbox' });
+    images.checked = plan.volumes.length > 0;
+    images.disabled = plan.volumes.length === 0;
+    images.addEventListener('change', update);
     const chosenFormats = () => new Set(boxes.filter((b) => b.box.checked).map((b) => b.format));
 
     function update() {
       const chosen = chosenFormats();
-      const n = chooseFormats(plan, chosen).length;
+      const picked = chosen.size > 0 || images.checked;
+      const n = chooseFormats(plan, chosen).length + (images.checked ? plan.volumes.length : 0);
       const series = seriesNameFor(nameInput.value, folder);
-      addSubmit.disabled = !chosen.size || !series;
-      summary.textContent = !chosen.size
+      addSubmit.disabled = !picked || !series;
+      summary.textContent = !picked
         ? 'Choose at least one format'
         : !series ? 'Type a series name'
         : `${n} book${n === 1 ? '' : 's'} will be added to "${series}"`;
@@ -191,13 +215,17 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
       e.preventDefault();
       const series = seriesNameFor(nameInput.value, folder);
       if (addSubmit.disabled || !series) return;
-      const chosen = chooseFormats(plan, chosenFormats()).map((b) => files[b.index]!);
+      const items = [
+        ...chooseFormats(plan, chosenFormats()).map((b) => fileItem(files[b.index]!)),
+        ...(images.checked ? plan.volumes.map((v) => volumeItem(v, files)) : []),
+      ];
       dlg.close();
-      void addFolder(chosen, series);
+      void addFolder(items, series);
     } },
       h('h2', {}, `Add folder "${folder}"`),
       h('label', { class: 'field' }, h('span', {}, 'Series name'), nameInput),
-      h('fieldset', { class: 'formats' }, h('legend', {}, 'Formats'), ...boxes.map((b) => b.label)),
+      h('fieldset', { class: 'formats' }, h('legend', {}, 'Contents'), ...boxes.map((b) => b.label),
+        h('label', { class: 'folder-format' }, images, `Image folders (${volumes(plan.volumes.length)})`)),
       summary,
       h('div', { class: 'folder-actions' },
         h('button', { class: 'btn', type: 'button', onclick: () => dlg.close() }, 'Cancel'),
@@ -214,9 +242,9 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     nameInput.focus();
   }
 
-  async function addFolder(chosen: File[], series: string) {
-    const added = await addBooks(chosen, series);
-    const failed = chosen.length - added;
+  async function addFolder(items: Item[], series: string) {
+    const added = await addBooks(items, series);
+    const failed = items.length - added;
     const message = [added ? `Added ${added} book${added === 1 ? '' : 's'} to "${series}".` : '', failed ? `${failed} failed.` : '']
       .filter(Boolean).join(' ');
     if (message) toast(message, failed ? 'error' : 'info');
@@ -240,13 +268,84 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   const clearFilters = () => {
     query = search.value = '';
     selected = [];
+    stopScan();
     render();
   };
 
+  /** Ends the running scan and drops what it found. */
+  function stopScan() {
+    scanId++;
+    scan = null;
+  }
+
+  // Like the in-book search, a scan waits for a pause in typing.
+  const scheduleScan = debounce(() => void runScan(), 400);
+
+  /** Reads each EPUB and PDF in turn (the text is cached after the first time) and shows the matches of the query. */
+  async function runScan() {
+    const id = ++scanId;
+    const q = query.trim();
+    scan = null;
+    if (!finding || fold(q).length < 2) return render();
+    try {
+      const { extractText } = await import('../library/book-text'); // pdf.js is big: only loaded for a search
+      if (id !== scanId) return;
+      const targets = books.filter((b) => b.format !== 'cbz'); // comics have no text
+      for await (const step of scanBooks(targets, q, (b) => getBookText(b.id, (blob) => extractText(blob, b.format)))) {
+        if (id !== scanId) return;
+        scan = step;
+        render();
+      }
+    } catch {
+      if (id === scanId) toast("Couldn't search inside books.", 'error');
+    }
+  }
+
+  function toggleFinding() {
+    finding = !finding;
+    findBtn.setAttribute('aria-pressed', String(finding));
+    stopScan();
+    if (finding) scheduleScan();
+    render();
+  }
+
+  /** What the scan is doing, or what it found, for the status line. */
+  function findStatus(): string {
+    const q = query.trim();
+    if (fold(q).length < 2) return 'Type at least 2 characters to search inside books.';
+    if (!scan) return 'Searching…';
+    if (scan.done < scan.total) return `Searching ${scan.done} of ${scan.total} books…`;
+    const found = scan.hits.length
+      ? `${scan.hits.length} ${scan.hits.length === 1 ? 'book matches' : 'books match'}`
+      : `No book contains “${q}”`;
+    const failed = scan.unreadable ? `${scan.unreadable} ${scan.unreadable === 1 ? 'book' : 'books'} could not be read` : '';
+    return [found, failed].filter(Boolean).join('. ') + '.';
+  }
+
+  function hitList(hits: BookHit[]) {
+    return h('ul', { class: 'book-hits' }, ...hits.map((hit) => h('li', {}, bookHitButton(hit))));
+  }
+
+  /** One book found by the scan: its cover, title, match count and the first excerpts. Opens the book at the query. */
+  function bookHitButton(hit: BookHit) {
+    const q = query.trim();
+    const n = hit.capped ? `${hit.count}+` : String(hit.count);
+    return h('button', { class: 'book-hit', type: 'button', onclick: () => { setPendingFind(hit.book.id, q); onOpen(hit.book.id); } },
+      h('div', { class: 'cover book-hit-cover' }, coverOf(hit.book)),
+      h('div', { class: 'book-hit-body' },
+        h('p', { class: 'book-hit-title' }, hit.book.title),
+        h('p', { class: 'book-hit-count' }, `${n} ${hit.count === 1 && !hit.capped ? 'match' : 'matches'}`),
+        ...hit.excerpts.map((m) => {
+          const { pre, match, post } = excerptParts(m);
+          return h('p', { class: 'book-hit-excerpt' }, pre, h('mark', {}, match), post);
+        })));
+  }
+
   function render() {
     if (!loaded) return;
+    const hunting = finding && fold(query).length >= 2;
     const counts = tagCounts(books);
-    selected = selected.filter((t) => counts.some((c) => c.tag === t)); // a tag nobody carries any more cannot stay selected
+    selected = liveSelection(selected, books); // a category nobody carries any more cannot stay selected
     const lastRead = new Map([...progress].filter(([, p]) => p.fraction > 0).map(([id, p]) => [id, p.updatedAt]));
     const view = libraryView(books, { query, tags: selected, sort }, lastRead);
     // The open series is dropped when it no longer has a visible volume (removed, or filtered out): back to the library.
@@ -254,12 +353,13 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     if (!series) openSeries = null;
 
     tools.hidden = count.hidden = view.state === 'empty-library';
-    chips.hidden = !counts.length;
+    chips.hidden = finding || !counts.length;
+    sortLabel.hidden = finding;
     chips.replaceChildren(...counts.map(({ tag, count: n }) =>
       h('button', { class: 'chip', type: 'button', 'aria-pressed': String(selected.includes(tag)),
         onclick: () => { selected = selected.includes(tag) ? selected.filter((t) => t !== tag) : [...selected, tag]; render(); } },
-        tag, h('small', {}, String(n)))));
-    count.textContent = countLabel(view.shown, view.total);
+        ...(tag === FAVORITES ? [libIcon('star'), 'Favorites'] : [tag]), h('small', {}, String(n)))));
+    count.textContent = finding ? findStatus() : countLabel(view.shown, view.total);
 
     if (view.state === 'empty-library') {
       results.replaceChildren(
@@ -273,11 +373,13 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
               h('button', { class: 'link', type: 'button', onclick: settings.open }, 'Restore it from Settings')),
           )),
       );
+    } else if (hunting) {
+      results.replaceChildren(...(scan && scan.done === scan.total ? [hitList(rankHits(scan.hits))] : []));
     } else if (view.state === 'no-results') {
       results.replaceChildren(
         h('section', { class: 'no-results' },
           h('h2', {}, 'No results'),
-          h('p', {}, query.trim() ? `No book matches "${query.trim()}"${selected.length ? ' with those tags' : ''}.` : 'No book has all of those tags.'),
+          h('p', {}, query.trim() ? `No book matches "${query.trim()}"${selected.length ? ' with those categories' : ''}.` : 'No book has all of those categories.'),
           h('button', { class: 'btn', type: 'button', onclick: clearFilters }, 'Clear search and filters')),
       );
     } else if (series) {
@@ -285,9 +387,15 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
         h('div', { class: 'series-head' },
           iconButton('back', 'Back to library', closeSeries, 'series-back'),
           h('h2', {}, series.name)),
-        h('ul', { class: 'grid' }, ...series.books.map(card)));
+        h('ul', { class: 'grid' }, ...series.books.map((b) => card(b))));
     } else {
-      results.replaceChildren(h('ul', { class: 'grid' }, ...view.entries.map((e) => (e.kind === 'book' ? card(e.book) : seriesCard(e)))));
+      // "Continue reading" only on the plain library: no search text, no category and no open series.
+      const recent = !query.trim() && !selected.length ? recentBooks(books, new Map([...progress].map(([id, p]): [string, number] => [id, p.updatedAt]))) : [];
+      results.replaceChildren(
+        ...(recent.length ? [h('section', { class: 'shelf', 'aria-labelledby': 'shelf-title' },
+          h('h2', { id: 'shelf-title' }, 'Continue reading'),
+          h('ul', { class: 'shelf-row' }, ...recent.map((b) => card(b, true))))] : []),
+        h('ul', { class: 'grid' }, ...view.entries.map((e) => (e.kind === 'book' ? card(e.book) : seriesCard(e)))));
     }
   }
 
@@ -323,12 +431,14 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     return h('li', { class: 'card series', 'data-series': key }, open);
   }
 
-  function card(b: BookMeta) {
-    const open = h('button', { class: 'card-open', type: 'button', 'aria-label': `Open ${b.title}`, onclick: () => onOpen(b.id) });
+  /** A book in the grid, or (`shelf`) a lighter card on the "Continue reading" row, which has no edit buttons. */
+  function card(b: BookMeta, shelf = false) {
     const p = progress.get(b.id);
+    // The shelf repeats books of the grid: its name differs so each button is still one unambiguous book.
+    const label = p && p.fraction > 0 ? bookLabel(b.title, p.fraction) : `Open ${b.title}`;
+    const open = h('button', { class: 'card-open', type: 'button', 'aria-label': shelf ? label.replace(/^Open/, 'Continue reading') : label, onclick: () => onOpen(b.id) });
     const fill = h('i', { style: `transform:scaleX(${p && p.fraction > 0 ? Math.min(1, p.fraction) : 0})` });
-    if (p && p.fraction > 0) open.setAttribute('aria-label', bookLabel(b.title, p.fraction));
-    const tags = cleanTags(b.tags);
+    const tags = cleanTags(b.tags).filter((t) => t !== FAVORITES); // the star already says it
     open.append(
       h('div', { class: 'cover' }, coverOf(b)),
       h('p', { class: 'card-title' }, b.title),
@@ -336,7 +446,12 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
       ...(tags.length ? [h('p', { class: 'card-tagline' }, tags.map((t) => `#${t}`).join(' '))] : []),
       h('div', { class: 'progress', 'aria-hidden': 'true' }, fill),
     );
+    if (shelf) return h('li', { class: 'shelf-card' }, open);
 
+    const fav = isFavorite(b);
+    const star = h('button', { class: 'icon-btn card-fav', type: 'button', 'aria-pressed': String(fav),
+      'aria-label': `${fav ? 'Remove' : 'Add'} ${b.title} ${fav ? 'from' : 'to'} favorites`, title: fav ? 'Remove from favorites' : 'Add to favorites',
+      onclick: () => void setFavorite(b) }, libIcon('star'));
     const cancel = h('button', { class: 'btn', type: 'button' }, 'Cancel');
     const li = h('li', { class: 'card', 'data-book': b.id }, open);
     const toggle = (on: boolean) => {
@@ -345,8 +460,9 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     };
     cancel.onclick = () => toggle(false);
     li.append(
+      star,
       iconButton('trash', `Remove ${b.title}`, () => toggle(true), 'card-remove'),
-      h('button', { class: 'icon-btn card-tags', type: 'button', 'aria-label': `Edit tags of ${b.title}`, title: 'Edit tags', onclick: () => editTags(b) }, libIcon('tag')),
+      h('button', { class: 'icon-btn card-tags', type: 'button', 'aria-label': `Edit categories of ${b.title}`, title: 'Edit categories', onclick: () => editTags(b) }, libIcon('tag')),
       h('div', { class: 'confirm' },
         h('p', {}, 'Remove from your library?'),
         cancel,
@@ -363,20 +479,33 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     return li;
   }
 
-  /** A small dialog to add and remove one book's tags. Every change is saved at once; the library behind it refreshes. */
+  /** Stars or unstars a book. The refresh redraws the card, so focus goes back to its star. */
+  async function setFavorite(b: BookMeta) {
+    const r = toggleFavorite(b.tags);
+    if (!r.ok) return toast(TAG_ERRORS[r.reason], 'error');
+    try {
+      await setTags(b.id, r.tags);
+    } catch {
+      return toast("Couldn't save the categories.", 'error');
+    }
+    await refresh();
+    main.querySelector<HTMLElement>(`[data-book="${b.id}"] .card-fav`)?.focus();
+  }
+
+  /** A small dialog to add and remove one book's categories. Every change is saved at once; the library behind it refreshes. */
   function editTags(b: BookMeta) {
     let tags = cleanTags(b.tags);
     const list = h('ul', { class: 'tag-list' });
     const error = h('p', { class: 'tag-error', role: 'alert' });
-    const field = h('input', { class: 'tag-input', type: 'text', 'aria-label': 'New tag', placeholder: 'Add a tag', autocomplete: 'off', list: 'tag-suggestions' });
-    const dlg = sheet('tag-sheet', `Tags of ${b.title}`);
+    const field = h('input', { class: 'tag-input', type: 'text', 'aria-label': 'New category', placeholder: 'Add a category', autocomplete: 'off', list: 'tag-suggestions' });
+    const dlg = sheet('tag-sheet', `Categories of ${b.title}`);
 
     async function save(next: string[]) {
       try {
         tags = cleanTags((await setTags(b.id, next)).tags);
         error.textContent = '';
       } catch {
-        error.textContent = "Couldn't save the tags.";
+        error.textContent = "Couldn't save the categories.";
         return;
       }
       draw();
@@ -385,8 +514,8 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     function draw() {
       list.replaceChildren(...(tags.length
         ? tags.map((t) => h('li', {}, h('span', { class: 'chip static' }, t,
-            h('button', { type: 'button', class: 'chip-x', 'aria-label': `Remove tag ${t}`, onclick: () => void save(removeTag(tags, t)) }, '×'))))
-        : [h('li', { class: 'tag-none' }, 'No tags yet.')]));
+            h('button', { type: 'button', class: 'chip-x', 'aria-label': `Remove category ${t}`, onclick: () => void save(removeTag(tags, t)) }, '×'))))
+        : [h('li', { class: 'tag-none' }, 'No categories yet.')]));
     }
     async function add() {
       // "a, b" adds both; if any one is refused nothing is saved, so the user fixes the text once.
@@ -404,7 +533,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     draw();
     dlg.append(
       h('form', { class: 'tag-form', onsubmit: (e: Event) => { e.preventDefault(); void add(); } },
-        h('h2', {}, 'Tags'),
+        h('h2', {}, 'Categories'),
         h('p', { class: 'tag-book' }, b.title),
         list,
         h('div', { class: 'tag-add' }, field, h('button', { class: 'btn primary', type: 'submit' }, 'Add')),
@@ -424,6 +553,8 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   void refresh();
   return () => {
     ac.abort();
+    finding = false; // a scan still waiting for its pause must not start once the library is gone
+    stopScan();
     unsubInstall?.();
     settings.dispose();
     root.replaceChildren();

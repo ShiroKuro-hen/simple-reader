@@ -379,11 +379,11 @@ async (page, env = {}) => {
   await step('keyboard: the bookmark button and panel are reachable by Tab', async () => {
     await page.keyboard.press('Tab');
     const names = [];
-    for (let i = 0; i < 8; i++) { names.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))); await page.keyboard.press('Tab'); }
+    for (let i = 0; i < 10; i++) { names.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label'))); await page.keyboard.press('Tab'); }
     ok(names.includes('Annotations') && (names.includes('Add bookmark') || names.includes('Remove bookmark')), 'tab order: ' + names.join(', '));
   });
 
-  await step('PDF: bookmark by page persists and jumps; selecting text offers no highlight row', async () => {
+  await step('PDF: bookmark by page persists and jumps; selecting text offers the highlight colours', async () => {
     await backToLibrary();
     await page.locator('.card:not(:has(.card-title:text("Lighthouse"))) .card-open').first().click();
     await page.locator('.reader').waitFor();
@@ -400,7 +400,7 @@ async (page, env = {}) => {
     ok(text.length === 1 && /Bookmark/.test(text[0]) && /Page 2/.test(text[0]), 'rows: ' + text);
     await sheet.locator('.ann-main').click();
     await (await top('Remove bookmark')).waitFor({ timeout: 8000 });
-    // a PDF selection shows the lookup but not the highlight row
+    // a PDF selection shows the lookup and the colours (pdf-highlights.e2e.js covers the highlight itself)
     await page.keyboard.press('Escape');
     const word = await page.evaluate(() => {
       const tl = document.querySelector('.textLayer');
@@ -415,7 +415,7 @@ async (page, env = {}) => {
     });
     await page.mouse.dblclick(word.x, word.y);
     await page.locator('.popup:not([hidden])').waitFor({ timeout: 8000 });
-    eq(await page.locator('.popup .dot').count(), 0, 'no dots on PDF');
+    eq(await page.locator('.popup .dot').count(), 4, 'colour dots on PDF');
   });
 
   const failed = results.filter((r) => !r.ok);

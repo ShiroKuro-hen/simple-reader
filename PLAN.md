@@ -34,17 +34,17 @@ Hecho: CBZ (derecha a izquierda, doble página, zoom, precarga), aviso de versi�
 
 ### B. Lectura de texto
 - **RTL y escritura vertical** en EPUB: hecho. Las teclas y los bordes siguen la dirección del libro, y Ajustes > Dirección del texto permite forzar horizontal.
-- **Resaltados en PDF** (hoy solo marcadores).
-- **Búsqueda dentro del libro.**
+- **Resaltados en PDF**: hecho (la ubicación guarda página y cajas por línea, en fracciones de la página).
+- **Búsqueda dentro del libro** (EPUB): hecho. Ctrl+F, resultados por capítulo, resaltado y salto al tocar.
 
 ### C. Biblioteca
-- **Importar una carpeta entera** de libros.
-- **Series / volúmenes** agrupados y ordenados (clave para manga).
+- **Importar una carpeta entera** de libros: hecho.
+- **Series / volúmenes** agrupados y ordenados (clave para manga): hecho.
 - **Búsqueda de texto en toda la biblioteca**, solo si el rendimiento con ~200 libros lo permite sin índice pesado.
 
 ### D. Nativo (hay que cerrarlo)
 - Probar instalador de Windows y APK en equipos reales.
-- Asociar `.epub` / `.pdf` / `.cbz` (ya está «Abrir con» en Android).
+- Asociar `.epub` / `.pdf` / `.cbz` / `.cbr`: hecho en Windows (doble clic y «Abrir con»); en Android ya estaba.
 - Firmar las versiones.
 - Comprobar que las consultas de palabras funcionan con el origen nativo.
 
