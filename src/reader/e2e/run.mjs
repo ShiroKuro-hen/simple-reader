@@ -1022,7 +1022,34 @@ await test('hanging heading: switching book -> horizontal live turns the spacing
   assert.equal((await hangProbe()).padTop, 0);
   await setWriting('book');
   assert.ok((await hangProbe()).padTop > 0, 'the own spacing of the book is back');
-});// Opt-in: COMIC_RAR=/path/to/real.cbr runs against a real comic (never committed). The file goes in through the page's file input.
+});// ---- A table of contents of nested hanging blocks (the paragraph inherits the indent, the div owns the padding) ----
+const tocFirstLines = () =>
+  ev(() => {
+    const d = session.docs.at(-1);
+    return [...d.querySelectorAll('div > p:first-child')].map((p) => {
+      const r = d.createRange();
+      r.setStart(p.firstChild, 0);
+      r.setEnd(p.firstChild, 1);
+      return Math.round(r.getBoundingClientRect().left);
+    });
+  });
+
+await test('toc of hanging blocks: overlined links (a vertical underline) are underlined in horizontal mode, and left alone otherwise', async () => {
+  const decoration = () => ev(() => getComputedStyle(session.docs.at(-1).querySelector('a.ov')).textDecorationLine);
+  await open('book-ja-toc.epub', { settings: WRITING('book') });
+  assert.equal(await decoration(), 'overline', 'the book own decoration stays in book mode');
+  await open('book-ja-toc.epub', { settings: WRITING('horizontal') });
+  assert.equal(await decoration(), 'underline');
+});
+
+await test('toc of hanging blocks: in horizontal mode every entry starts at the same place', async () => {
+  await open('book-ja-toc.epub', { settings: WRITING('horizontal') });
+  const lefts = await tocFirstLines();
+  assert.equal(lefts.length, 3, `three groups, got ${lefts.length}`);
+  assert.ok(new Set(lefts).size === 1, `the first lines of the groups start at ${lefts.join(', ')}: they must line up`);
+});
+
+// Opt-in: COMIC_RAR=/path/to/real.cbr runs against a real comic (never committed). The file goes in through the page's file input.
 if (process.env.COMIC_RAR) {
   await test('cbr real file (COMIC_RAR): page 1 renders, next works, and the page count is reported', async () => {
     await page.setInputFiles('#pick', process.env.COMIC_RAR);
