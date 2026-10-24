@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { fixtureBytes, fixtureFile } from '../reader/fixtures/load';
 import { storeZip } from '../reader/fixtures/store-zip';
+import { extractText } from '../library/book-text';
 import { memoryStorage } from './opfs';
 import { createLibrary, setWriting } from './library';
 
@@ -94,6 +95,46 @@ describe('removeBook', () => {
   it('is a no-op for an unknown id', async () => {
     const { lib } = setup();
     await lib.removeBook('f'.repeat(64));
+  });
+
+  it('deletes the cached text of that book too', async () => {
+    const { fs, lib } = setup();
+    const { id } = await lib.addBook(fixtureFile('book-en.epub'));
+    await lib.getBookText(id, (blob) => extractText(blob, 'epub'));
+    await lib.removeBook(id);
+    expect(await fs.list('text/')).toEqual([]);
+  });
+});
+
+describe('getBookText', () => {
+  it('extracts a book once, then reads the cached text', async () => {
+    const { fs, lib } = setup();
+    const { id } = await lib.addBook(fixtureFile('book-en.epub'));
+    let extractions = 0;
+    const extract = (blob: Blob) => (extractions++, extractText(blob, 'epub'));
+    const first = await lib.getBookText(id, extract);
+    const again = await lib.getBookText(id, extract);
+    expect(first).toContain('A storm arrived without warning.');
+    expect(again).toBe(first);
+    expect(extractions).toBe(1);
+    expect(await fs.list('text/')).toEqual([`text/${id}.txt`]);
+  });
+
+  it('caches nothing when the book cannot be read', async () => {
+    const { fs, lib } = setup();
+    const { id } = await lib.addBook(fixtureFile('book-en.epub'));
+    await expect(lib.getBookText(id, () => Promise.reject(new Error('damaged')))).rejects.toThrow('damaged');
+    expect(await fs.list('text/')).toEqual([]);
+  });
+
+  it('caches a book with no text as empty text, not as a miss', async () => {
+    const { lib } = setup();
+    const { id } = await lib.addBook(fixtureFile('book-en.epub'));
+    let extractions = 0;
+    const none = async () => (extractions++, '');
+    expect(await lib.getBookText(id, none)).toBe('');
+    expect(await lib.getBookText(id, none)).toBe('');
+    expect(extractions).toBe(1);
   });
 });
 

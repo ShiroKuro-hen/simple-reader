@@ -1,17 +1,22 @@
 import type { BookFormat, BookMeta, Progress } from '../types';
 import { chooseFormats, packVolume, planFolderImport, seriesNameFor, type FolderPlan, type ImageVolume } from '../library/folder-import';
+import { setPendingFind } from '../library/pending-find';
 import { recentBooks } from '../library/recent';
+import { fold } from '../library/search';
 import { parseSortKey, SORT_KEYS, type SortKey } from '../library/sort';
+import { type BookHit, rankHits, scanBooks, type ScanStep } from '../library/text-search';
 import { addTag, cleanTags, FAVORITES, isFavorite, liveSelection, MAX_TAG_LENGTH, MAX_TAGS, removeTag, tagCounts, toggleFavorite, type AddResult } from '../library/tags';
 import { countLabel, libraryView } from '../library/view';
 import type { InstallPrompt } from '../pwa/install';
-import { addBook, getProgress, listBooks, removeBook, setTags } from '../storage/library';
+import { excerptParts } from '../reader/search-results';
+import { addBook, getBookText, getProgress, listBooks, removeBook, setTags } from '../storage/library';
 import { coverInitial, titleHue } from './cover';
 import { h, icon, iconButton, sheet, toast } from './dom';
 import type { Entry } from '../library/series';
 import { libIcon } from './library-icons';
 import { bookLabel } from './reading';
 import { createSettings, type App } from './settings';
+import { debounce } from './timing';
 
 type SeriesEntry = Extract<Entry, { kind: 'series' }>;
 /** One thing to add: a picked file, or a comic packed from a folder of images (packed only when its turn comes). */
@@ -52,6 +57,12 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   let sort = storedSort();
   /** Lower-cased name of the series whose volumes are listed; session only, never stored. */
   let openSeries: string | null = null;
+  /** "Search inside books" is on: the search box then looks in the text of EPUB and PDF books. Session only. */
+  let finding = false;
+  /** Each scan takes a number; a scan whose number is no longer the current one stops. */
+  let scanId = 0;
+  /** Progress and matches of the scan for the current query; null until one has started. */
+  let scan: ScanStep | null = null;
 
   const input = h('input', {
     type: 'file', accept: '.epub,.pdf,.cbz,.cbr,application/epub+zip,application/pdf,application/vnd.comicbook+zip,application/vnd.comicbook-rar,application/x-cbr', multiple: true, hidden: true,
@@ -74,7 +85,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   // Search, sort, category chips and the count are created once so typing never loses focus; render() only refills them.
   const search = h('input', { class: 'search-input', type: 'search', placeholder: 'Search title, author or category', 'aria-label': 'Search your library',
     autocomplete: 'off', spellcheck: 'false',
-    oninput: () => { query = search.value; render(); } });
+    oninput: () => { query = search.value; if (finding) { stopScan(); scheduleScan(); } render(); } });
   const sortSel = h('select', { class: 'sort-select', 'aria-label': 'Sort by',
     onchange: () => {
       sort = parseSortKey(sortSel.value);
@@ -82,8 +93,11 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
       render();
     } }, ...SORT_KEYS.map((k) => h('option', { value: k }, SORT_LABELS[k])));
   sortSel.value = sort;
+  const findBtn = h('button', { class: 'btn find-toggle', type: 'button', 'aria-pressed': 'false', onclick: () => toggleFinding() },
+    icon('book'), 'Search inside books');
+  const sortLabel = h('label', { class: 'sort' }, sortSel);
   const tools = h('div', { class: 'lib-tools', hidden: true },
-    h('label', { class: 'search' }, libIcon('search'), search), h('label', { class: 'sort' }, sortSel));
+    h('label', { class: 'search' }, libIcon('search'), search), findBtn, sortLabel);
   const chips = h('div', { class: 'tag-chips', role: 'group', 'aria-label': 'Filter by category', hidden: true });
   const count = h('p', { class: 'lib-count', role: 'status', 'aria-live': 'polite', hidden: true });
   const results = h('div', { class: 'lib-results' });
@@ -254,11 +268,82 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   const clearFilters = () => {
     query = search.value = '';
     selected = [];
+    stopScan();
     render();
   };
 
+  /** Ends the running scan and drops what it found. */
+  function stopScan() {
+    scanId++;
+    scan = null;
+  }
+
+  // Like the in-book search, a scan waits for a pause in typing.
+  const scheduleScan = debounce(() => void runScan(), 400);
+
+  /** Reads each EPUB and PDF in turn (the text is cached after the first time) and shows the matches of the query. */
+  async function runScan() {
+    const id = ++scanId;
+    const q = query.trim();
+    scan = null;
+    if (!finding || fold(q).length < 2) return render();
+    try {
+      const { extractText } = await import('../library/book-text'); // pdf.js is big: only loaded for a search
+      if (id !== scanId) return;
+      const targets = books.filter((b) => b.format !== 'cbz'); // comics have no text
+      for await (const step of scanBooks(targets, q, (b) => getBookText(b.id, (blob) => extractText(blob, b.format)))) {
+        if (id !== scanId) return;
+        scan = step;
+        render();
+      }
+    } catch {
+      if (id === scanId) toast("Couldn't search inside books.", 'error');
+    }
+  }
+
+  function toggleFinding() {
+    finding = !finding;
+    findBtn.setAttribute('aria-pressed', String(finding));
+    stopScan();
+    if (finding) scheduleScan();
+    render();
+  }
+
+  /** What the scan is doing, or what it found, for the status line. */
+  function findStatus(): string {
+    const q = query.trim();
+    if (fold(q).length < 2) return 'Type at least 2 characters to search inside books.';
+    if (!scan) return 'Searching…';
+    if (scan.done < scan.total) return `Searching ${scan.done} of ${scan.total} books…`;
+    const found = scan.hits.length
+      ? `${scan.hits.length} ${scan.hits.length === 1 ? 'book matches' : 'books match'}`
+      : `No book contains “${q}”`;
+    const failed = scan.unreadable ? `${scan.unreadable} ${scan.unreadable === 1 ? 'book' : 'books'} could not be read` : '';
+    return [found, failed].filter(Boolean).join('. ') + '.';
+  }
+
+  function hitList(hits: BookHit[]) {
+    return h('ul', { class: 'book-hits' }, ...hits.map((hit) => h('li', {}, bookHitButton(hit))));
+  }
+
+  /** One book found by the scan: its cover, title, match count and the first excerpts. Opens the book at the query. */
+  function bookHitButton(hit: BookHit) {
+    const q = query.trim();
+    const n = hit.capped ? `${hit.count}+` : String(hit.count);
+    return h('button', { class: 'book-hit', type: 'button', onclick: () => { setPendingFind(hit.book.id, q); onOpen(hit.book.id); } },
+      h('div', { class: 'cover book-hit-cover' }, coverOf(hit.book)),
+      h('div', { class: 'book-hit-body' },
+        h('p', { class: 'book-hit-title' }, hit.book.title),
+        h('p', { class: 'book-hit-count' }, `${n} ${hit.count === 1 && !hit.capped ? 'match' : 'matches'}`),
+        ...hit.excerpts.map((m) => {
+          const { pre, match, post } = excerptParts(m);
+          return h('p', { class: 'book-hit-excerpt' }, pre, h('mark', {}, match), post);
+        })));
+  }
+
   function render() {
     if (!loaded) return;
+    const hunting = finding && fold(query).length >= 2;
     const counts = tagCounts(books);
     selected = liveSelection(selected, books); // a category nobody carries any more cannot stay selected
     const lastRead = new Map([...progress].filter(([, p]) => p.fraction > 0).map(([id, p]) => [id, p.updatedAt]));
@@ -268,12 +353,13 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     if (!series) openSeries = null;
 
     tools.hidden = count.hidden = view.state === 'empty-library';
-    chips.hidden = !counts.length;
+    chips.hidden = finding || !counts.length;
+    sortLabel.hidden = finding;
     chips.replaceChildren(...counts.map(({ tag, count: n }) =>
       h('button', { class: 'chip', type: 'button', 'aria-pressed': String(selected.includes(tag)),
         onclick: () => { selected = selected.includes(tag) ? selected.filter((t) => t !== tag) : [...selected, tag]; render(); } },
         ...(tag === FAVORITES ? [libIcon('star'), 'Favorites'] : [tag]), h('small', {}, String(n)))));
-    count.textContent = countLabel(view.shown, view.total);
+    count.textContent = finding ? findStatus() : countLabel(view.shown, view.total);
 
     if (view.state === 'empty-library') {
       results.replaceChildren(
@@ -287,6 +373,8 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
               h('button', { class: 'link', type: 'button', onclick: settings.open }, 'Restore it from Settings')),
           )),
       );
+    } else if (hunting) {
+      results.replaceChildren(...(scan && scan.done === scan.total ? [hitList(rankHits(scan.hits))] : []));
     } else if (view.state === 'no-results') {
       results.replaceChildren(
         h('section', { class: 'no-results' },
@@ -465,6 +553,8 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   void refresh();
   return () => {
     ac.abort();
+    finding = false; // a scan still waiting for its pause must not start once the library is gone
+    stopScan();
     unsubInstall?.();
     settings.dispose();
     root.replaceChildren();

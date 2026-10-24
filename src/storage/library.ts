@@ -93,6 +93,7 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
     return new Blob([data as BlobPart], { type: MIME[meta.format] });
   }
 
+  // text/ is this device's search cache: sync and backup copy only the folders listed in sync/r2.ts, so it stays here.
   async function removeBook(id: string): Promise<void> {
     await Promise.all([
       fs.remove(`books/${id}.epub`),
@@ -101,13 +102,24 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
       fs.remove(`meta/${id}.json`),
       fs.remove(`progress/${id}.json`),
       fs.remove(`annotations/${id}.json`),
+      fs.remove(`text/${id}.txt`),
     ]);
+  }
+
+  /** The plain text of a book for library search: read from the cache, or made by `extract` and cached the first time. */
+  async function getBookText(id: string, extract: (blob: Blob) => Promise<string>): Promise<string> {
+    const cached = await fs.read(`text/${id}.txt`);
+    if (cached !== null) return new TextDecoder().decode(cached);
+    const text = await extract(await getBookBlob(id));
+    await fs.write(`text/${id}.txt`, text);
+    return text;
   }
 
   return {
     addBook,
     listBooks,
     getBookBlob,
+    getBookText,
     removeBook,
     saveProgress: (p: Progress) => writeJson(`progress/${p.bookId}.json`, p),
     getProgress: (bookId: string) => readJson<Progress>(`progress/${bookId}.json`),
@@ -121,7 +133,7 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
   };
 }
 
-export const { addBook, listBooks, getBookBlob, removeBook, saveProgress, getProgress, getAnnotations, saveAnnotations, saveSettings, getSettings } =
+export const { addBook, listBooks, getBookBlob, getBookText, removeBook, saveProgress, getProgress, getAnnotations, saveAnnotations, saveSettings, getSettings } =
   createLibrary(storage);
 
 import { cleanTags } from '../library/tags';

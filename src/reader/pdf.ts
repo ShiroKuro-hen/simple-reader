@@ -5,19 +5,14 @@ import { type Box, decodeLocation, encodeLocation, hit, normalizeRects } from '.
 import { fractionOfPage, pageFromFraction, parsePage } from './pdf-nav';
 import { pageHits, pageText, pieceSpans } from './pdf-search';
 import { matchesIn } from './search-results';
-import { pdfjs } from './pdfjs';
+import { loadPdf, pdfjs } from './pdfjs';
 import { readSelection, replayable } from './selection';
 import { THEMES } from './theme';
 
 const PAD = 16;
 
 export async function openPdf(blob: Blob, container: HTMLElement, opts: OpenBookOptions): Promise<ReaderHandle> {
-  const task = pdfjs.getDocument({
-    data: new Uint8Array(await blob.arrayBuffer()),
-    // Needs node_modules/pdfjs-dist/cmaps copied to public/pdfjs/cmaps; without it only CJK-encoded PDFs degrade.
-    cMapUrl: `${import.meta.env.BASE_URL}pdfjs/cmaps/`,
-    cMapPacked: true,
-  });
+  const task = loadPdf(new Uint8Array(await blob.arrayBuffer()));
   const pdf = await task.promise;
   const total = pdf.numPages;
 
