@@ -95,7 +95,8 @@ async (page, ctx = {}) => {
     throw new Error(selector + ' did not turn the page (stayed at ' + before + ')');
   }
   async function openFromLibrary(titlePart) {
-    const card = titlePart ? page.getByRole('button', { name: new RegExp(`^Open ${titlePart}`) }) : page.locator('.card-open').first();
+    // Scoped to the grid: a book opened lately is also on the "Continue reading" shelf above it.
+    const card = titlePart ? page.locator('.grid').getByRole('button', { name: new RegExp(`^Open ${titlePart}`) }) : page.locator('.grid .card-open').first();
     await card.click();
     await page.locator('.reader').waitFor();
     await until(async () => !(await page.locator('.loading').count()), 'book to finish loading', 20000);
@@ -377,7 +378,7 @@ async (page, ctx = {}) => {
     ok((await overflowX()) <= 0, 'library scrolls horizontally on phone');
     const small = await page.evaluate(() => [...document.querySelectorAll('.lib button, .lib .icon-btn')].filter((b) => b.offsetParent && (b.getBoundingClientRect().height < 43.5 || b.getBoundingClientRect().width < 43.5)).map((b) => b.className + ':' + b.textContent.trim()));
     ok(small.length === 0, 'small targets: ' + small.join(', '));
-    await page.getByRole('button', { name: /^Open The Lighthouse/ }).click();
+    await page.locator('.grid').getByRole('button', { name: /^Open The Lighthouse/ }).click();
     await page.locator('.reader').waitFor();
     await until(async () => !(await page.locator('.loading').count()), 'book to load', 20000);
     ok((await overflowX()) <= 0, 'reader scrolls horizontally on phone');
@@ -423,7 +424,7 @@ async (page, ctx = {}) => {
       ok((await overflowX()) <= 0, 'library scrolls horizontally at ' + width);
       const small = await page.evaluate(() => [...document.querySelectorAll('.lib button, .lib .icon-btn')].filter((b) => b.offsetParent && (b.getBoundingClientRect().height < 43.5 || b.getBoundingClientRect().width < 43.5)).map((b) => b.className + ':' + b.textContent.trim()));
       ok(small.length === 0, 'small targets at ' + width + ': ' + small.join(', '));
-      await page.getByRole('button', { name: /^Open The Lighthouse/ }).click({ timeout: 8000 }).catch(async (e) => { throw new Error('open at ' + width + 'px: ' + (await page.locator('.lib-main').innerText().catch(() => '?')).slice(0, 200).split('\n').join(' | ') + ' // ' + String(e.message).split('\n')[0]); });
+      await page.locator('.grid').getByRole('button', { name: /^Open The Lighthouse/ }).click({ timeout: 8000 }).catch(async (e) => { throw new Error('open at ' + width + 'px: ' + (await page.locator('.lib-main').innerText().catch(() => '?')).slice(0, 200).split('\n').join(' | ') + ' // ' + String(e.message).split('\n')[0]); });
       await page.locator('.reader').waitFor();
       await until(async () => !(await page.locator('.loading').count()), 'book to load', 20000);
       ok((await overflowX()) <= 0, 'reader scrolls horizontally at ' + width);
@@ -505,7 +506,7 @@ async (page, ctx = {}) => {
 
   await step('series: tag a volume from the series view; removing volumes shrinks the series and its label, the last one returns to the library', async () => {
     await page.getByRole('button', { name: `Open series ${SERIES}, 3 volumes` }).click();
-    await page.getByRole('button', { name: 'Edit tags of The Lighthouse & the Sea' }).click();
+    await page.getByRole('button', { name: 'Edit categories of The Lighthouse & the Sea' }).click();
     const field = page.locator('.tag-input'); // has a datalist, so its role is combobox, not textbox
     await field.fill('reread');
     await field.press('Enter');
@@ -634,7 +635,7 @@ async (page, ctx = {}) => {
   await step('add folder: a folder with no supported files shows the error toast and no dialog', async () => {
     await resetApp();
     await pickFolder(SOLO);
-    await until(async () => /No EPUB, PDF, CBZ or CBR files in that folder\./.test(await toastText()), 'no-books toast');
+    await until(async () => /No EPUB, PDF, CBZ, CBR or image files in that folder\./.test(await toastText()), 'no-books toast');
     ok((await dialogOpen()) === 0, 'dialog opened for a folder with no books');
     ok((await page.locator('.card').count()) === 0, 'something was added');
   });
@@ -733,7 +734,7 @@ async (page, ctx = {}) => {
   const sectionWritingMode = () => page.evaluate(() => getComputedStyle(document.querySelector('foliate-view').renderer.getContents().at(-1).doc.body).writingMode);
   if (await page.locator('.reader').count()) await backToLibrary();
   await page.setInputFiles('input[type=file]', [FIX + 'book-ja-vertical.epub', FIX + 'sample.pdf', FIX + 'manga.cbz']);
-  await until(async () => (await page.getByRole('button', { name: /^Open 縦書きの本/ }).count()) === 1, 'the vertical book in the library', 15000);
+  await until(async () => (await page.locator('.grid').getByRole('button', { name: /^Open 縦書きの本/ }).count()) === 1, 'the vertical book in the library', 15000);
 
   await step('vertical EPUB: ArrowLeft turns forward and ArrowRight back; the left edge goes forward', async () => {
     await openFromLibrary('縦書きの本');

@@ -645,11 +645,24 @@ dialog.sheet-toc[open] { animation: slide-in 0.22s ease-out; }
 .no-results h2 { font-size: 22px; font-weight: 650; }
 .no-results p { color: var(--muted); max-width: 40ch; overflow-wrap: anywhere; }
 .card-tagline { margin: 2px 2px 0; font-size: 12px; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card-tags { position: absolute; top: 2px; left: 2px; color: #fff; opacity: 0; transition: opacity 0.15s; }
+.card-tags { position: absolute; top: 2px; right: 46px; color: #fff; opacity: 0; transition: opacity 0.15s; }
 .card-tags .icon { width: 30px; height: 30px; padding: 6px; border-radius: 50%; background: rgba(0, 0, 0, 0.6); }
 .card-tags:hover { background: transparent; }
 .card:hover .card-tags, .card:focus-within .card-tags { opacity: 1; }
 @media (hover: none) { .card-tags { opacity: 1; } }
+/* The star is always visible on a favorite; on other books it appears with the other card buttons. */
+.card-fav { position: absolute; top: 2px; left: 2px; color: #fff; opacity: 0; transition: opacity 0.15s; }
+.card-fav .icon { width: 30px; height: 30px; padding: 6px; border-radius: 50%; background: rgba(0, 0, 0, 0.6); }
+.card-fav:hover { background: transparent; }
+.card-fav[aria-pressed='true'] { opacity: 1; }
+.card-fav[aria-pressed='true'] .icon { fill: currentColor; }
+.card:hover .card-fav, .card:focus-within .card-fav { opacity: 1; }
+@media (hover: none) { .card-fav { opacity: 1; } }
+.chip .icon { width: 16px; height: 16px; }
+.shelf { margin: 0 0 24px; }
+.shelf h2 { margin: 0 2px 4px; font-size: 13px; font-weight: 650; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+.shelf-row { display: flex; gap: 16px; margin: 0; padding: 8px 6px 12px; list-style: none; overflow-x: auto; scroll-snap-type: x proximity; scrollbar-width: thin; }
+.shelf-card { flex: 0 0 136px; min-width: 0; scroll-snap-align: start; }
 dialog.tag-sheet { width: min(420px, calc(100vw - 32px)); max-height: 90dvh; border-radius: 18px; }
 .tag-form { display: grid; gap: 12px; padding: 20px; }
 .tag-form h2 { font-size: 18px; font-weight: 650; }

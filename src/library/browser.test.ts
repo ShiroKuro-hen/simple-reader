@@ -36,12 +36,12 @@ describe.skipIf(!pw)('library search, tags and sort in a real browser', { timeou
     if (tmp) rmSync(tmp, { recursive: true, force: true });
   });
 
-  const titles = (): Promise<string[]> => page.locator('.card-title').allTextContents();
+  const titles = (): Promise<string[]> => page.locator('.grid .card-title').allTextContents(); // not the "Continue reading" shelf
   const count = async () => (await page.locator('.lib-count').textContent()).trim();
   const search = async (q: string) => {
     await page.fill('input[type=search]', q);
   };
-  const tagButton = (title: string) => page.getByRole('button', { name: `Edit tags of ${title}` });
+  const tagButton = (title: string) => page.getByRole('button', { name: `Edit categories of ${title}` });
   const chip = (tag: string) => page.locator('.tag-chips .chip', { hasText: tag });
   const waitTitles = (expected: string[]) => expect.poll(titles, { timeout: 10_000 }).toEqual(expected);
 
@@ -93,7 +93,7 @@ describe.skipIf(!pw)('library search, tags and sort in a real browser', { timeou
     await page.locator('dialog.tag-sheet[open]').waitFor();
 
     await typeTag('');
-    expect(await page.locator('.tag-error').textContent()).toMatch(/Type a tag/);
+    expect(await page.locator('.tag-error').textContent()).toMatch(/Type a category/);
     await typeTag('x'.repeat(31));
     expect(await page.locator('.tag-error').textContent()).toMatch(/up to 30/);
 
@@ -105,7 +105,7 @@ describe.skipIf(!pw)('library search, tags and sort in a real browser', { timeou
     await expect.poll(() => page.locator('.tag-error').textContent()).toMatch(/already/);
     expect(await dialogTags()).toEqual(['ficción×', 'scifi×']); // nothing was added or lost
 
-    await page.getByRole('button', { name: 'Remove tag scifi' }).click();
+    await page.getByRole('button', { name: 'Remove category scifi' }).click();
     await expect.poll(dialogTags).toEqual(['ficción×']);
     await page.getByRole('button', { name: 'Done' }).click();
     await page.locator('dialog.tag-sheet').waitFor({ state: 'detached' });
@@ -142,7 +142,7 @@ describe.skipIf(!pw)('library search, tags and sort in a real browser', { timeou
 
     // Remove "manual" from the only book that has it while it is selected: the filter must not strand the user on an empty view.
     await tagButton('Sample PDF Manual').click();
-    await page.getByRole('button', { name: 'Remove tag manual' }).click();
+    await page.getByRole('button', { name: 'Remove category manual' }).click();
     await page.getByRole('button', { name: 'Done' }).click();
     await page.locator('dialog.tag-sheet').waitFor({ state: 'detached' });
     await expect.poll(async () => (await titles()).sort()).toEqual(['Sample PDF Manual', 'The Lighthouse & the Sea']);
@@ -248,7 +248,7 @@ describe.skipIf(!pw || !REAL_EPUB)('a real book of your own (opt-in: REAL_EPUB)'
       const word = title.split(/\s+/)[0]!;
       await page.fill('input[type=search]', word);
       expect(await page.locator('.card').count()).toBe(1);
-      await page.getByRole('button', { name: /^Edit tags of/ }).click();
+      await page.getByRole('button', { name: /^Edit categories of/ }).click();
       await page.fill('.tag-input', 'web novel');
       await page.keyboard.press('Enter');
       await page.getByRole('button', { name: 'Done' }).click();
