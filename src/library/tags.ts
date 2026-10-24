@@ -42,11 +42,32 @@ export function removeTag(tags: readonly string[] | undefined, raw: string): str
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
-/** Every tag in use with its number of books: most used first, ties alphabetical. */
+/** The reserved category behind the star: an ordinary tag with a fixed name, so it syncs and filters like the rest. */
+export const FAVORITES = 'favorites';
+
+export const isFavorite = (b: Pick<BookMeta, 'tags'>): boolean => cleanTags(b.tags).includes(FAVORITES);
+
+/** Adds or removes favorites; removing always works, adding can hit the limit like any other tag. */
+export function toggleFavorite(tags: readonly string[] | undefined): AddResult {
+  const current = cleanTags(tags);
+  if (current.includes(FAVORITES)) return { ok: true, tags: current.filter((t) => t !== FAVORITES) };
+  return addTag(current, FAVORITES);
+}
+
+/** Every tag in use with its number of books: favorites first, then most used, ties alphabetical. */
 export function tagCounts(books: readonly BookMeta[]): { tag: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const b of books) for (const t of cleanTags(b.tags)) counts.set(t, (counts.get(t) ?? 0) + 1);
-  return [...counts].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || collator.compare(a.tag, b.tag));
+  const rank = (tag: string) => (tag === FAVORITES ? 0 : 1);
+  return [...counts]
+    .map(([tag, count]) => ({ tag, count }))
+    .sort((a, b) => rank(a.tag) - rank(b.tag) || b.count - a.count || collator.compare(a.tag, b.tag));
+}
+
+/** The selected categories that at least one book still carries: a category whose last book is gone leaves the selection. */
+export function liveSelection(selected: readonly string[], books: readonly BookMeta[]): string[] {
+  const inUse = new Set(tagCounts(books).map((c) => c.tag));
+  return selected.filter((t) => inUse.has(t));
 }
 
 /** Books carrying all of `selected` (AND). No selection keeps everything. */

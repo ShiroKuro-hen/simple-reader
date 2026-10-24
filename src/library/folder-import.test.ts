@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { BookFormat } from '../types';
-import { chooseFormats, planFolderImport, seriesNameFor } from './folder-import';
+import { openComicArchive } from '../reader/comic-archive';
+import { readCbzInfo } from '../storage/cbz-info';
+import { chooseFormats, pageName, packVolume, planFolderImport, seriesNameFor } from './folder-import';
 
 const ALL = new Set<BookFormat>(['epub', 'pdf', 'cbz']);
 const paths = (plan: ReturnType<typeof planFolderImport>) => plan.books.map((b) => b.path);
@@ -45,7 +47,7 @@ describe('planFolderImport', () => {
   });
 
   it('ignores non-book files and counts them as ignored', () => {
-    const plan = planFolderImport(['S/notes.txt', 'S/cover.jpg', 'S/Vol 1.epub', 'S/Vol 1']);
+    const plan = planFolderImport(['S/notes.txt', 'S/Vol 1.epub', 'S/Vol 1', 'S/readme.md']);
     expect(paths(plan)).toEqual(['S/Vol 1.epub']);
     expect(plan.ignored).toBe(3);
   });
@@ -76,12 +78,13 @@ describe('planFolderImport', () => {
   });
 
   it('returns an empty plan for empty input', () => {
-    expect(planFolderImport([])).toEqual({ folder: '', books: [], counts: { epub: 0, pdf: 0, cbz: 0 }, ignored: 0 });
+    expect(planFolderImport([])).toEqual({ folder: '', books: [], counts: { epub: 0, pdf: 0, cbz: 0 }, ignored: 0, volumes: [] });
   });
 
   it('has no books when nothing is supported, but still reports every file as ignored', () => {
     const plan = planFolderImport(['S/a.txt', 'S/b.docx']);
     expect(plan.books).toEqual([]);
+    expect(plan.volumes).toEqual([]);
     expect(plan.counts).toEqual({ epub: 0, pdf: 0, cbz: 0 });
     expect(plan.ignored).toBe(2);
     expect(plan.folder).toBe('S');
@@ -123,5 +126,98 @@ describe('seriesNameFor', () => {
   it('is undefined when both the name and the folder are blank', () => {
     expect(seriesNameFor(' ', '  ')).toBeUndefined();
     expect(seriesNameFor('', '')).toBeUndefined();
+  });
+});
+
+describe('planFolderImport: folders of page images', () => {
+  const volumesOf = (input: string[]) => planFolderImport(input).volumes;
+  const pagesOf = (v: { pages: { path: string }[] }) => v.pages.map((p) => p.path);
+
+  it('makes the picked folder one volume when its images sit at the top', () => {
+    expect(volumesOf(['Root/001.jpg', 'Root/002.png'])).toEqual([
+      { name: 'Root', pages: [{ index: 0, path: 'Root/001.jpg' }, { index: 1, path: 'Root/002.png' }] },
+    ]);
+  });
+
+  it('makes every directory that directly holds images one volume named after it, at any depth', () => {
+    const plan = planFolderImport(['Root/Vol 1/a.jpg', 'Root/Vol 1/deep/x/b.jpg', 'Root/Vol 1/deep/c.jpg']);
+    expect(plan.volumes.map((v) => v.name)).toEqual(['Vol 1', 'deep', 'x']);
+    expect(plan.volumes.map((v) => pagesOf(v))).toEqual([['Root/Vol 1/a.jpg'], ['Root/Vol 1/deep/c.jpg'], ['Root/Vol 1/deep/x/b.jpg']]);
+  });
+
+  it('does not make a volume of a directory that only has images further down', () => {
+    expect(volumesOf(['Root/x/y/a.jpg']).map((v) => v.name)).toEqual(['y']);
+  });
+
+  it('keeps the root images and each subfolder apart, with the input indexes of their files', () => {
+    const plan = planFolderImport(['Root/cover.jpg', 'Root/Vol 1/1.png', 'Root/Vol 2/1.png']);
+    expect(plan.volumes).toEqual([
+      { name: 'Root', pages: [{ index: 0, path: 'Root/cover.jpg' }] },
+      { name: 'Vol 1', pages: [{ index: 1, path: 'Root/Vol 1/1.png' }] },
+      { name: 'Vol 2', pages: [{ index: 2, path: 'Root/Vol 2/1.png' }] },
+    ]);
+  });
+
+  it('puts the pages of a volume in natural order of their path', () => {
+    expect(pagesOf(volumesOf(['R/V/10.png', 'R/V/2.png', 'R/V/1.png'])[0]!)).toEqual(['R/V/1.png', 'R/V/2.png', 'R/V/10.png']);
+  });
+
+  it('accepts jpg, jpeg, png, webp, gif and avif in any case, and nothing else', () => {
+    const plan = planFolderImport(['R/a.JPG', 'R/b.jpeg', 'R/c.png', 'R/d.webp', 'R/e.gif', 'R/f.avif', 'R/g.bmp', 'R/h.tif']);
+    expect(plan.volumes[0]!.pages).toHaveLength(6);
+    expect(plan.ignored).toBe(2);
+  });
+
+  it('ignores dotfiles and __MACOSX junk like it does for books', () => {
+    const plan = planFolderImport(['R/.cover.jpg', 'R/__MACOSX/R/x.jpg', 'R/.hidden/y.jpg', 'R/z.jpg']);
+    expect(plan.volumes).toEqual([{ name: 'R', pages: [{ index: 3, path: 'R/z.jpg' }] }]);
+    expect(plan.ignored).toBe(3);
+  });
+
+  it('a folder of images alone has no books but has volumes', () => {
+    const plan = planFolderImport(['Mangas/Vol 1/a.webp']);
+    expect(plan.books).toEqual([]);
+    expect(plan.volumes).toHaveLength(1);
+  });
+
+  it('keeps book files and image volumes of the same folder side by side', () => {
+    const plan = planFolderImport(['S/Vol 1.epub', 'S/extra/a.jpg']);
+    expect(paths(plan)).toEqual(['S/Vol 1.epub']);
+    expect(plan.volumes.map((v) => v.name)).toEqual(['extra']);
+    expect(plan.ignored).toBe(0);
+  });
+});
+
+describe('pageName', () => {
+  it('zero pads to four digits and keeps the lower-case extension', () => {
+    expect(pageName(1, 12, 'R/a.JPG')).toBe('0001.jpg');
+    expect(pageName(12, 12, 'R/x/b.png')).toBe('0012.png');
+  });
+  it('pads to the width of the page count when there are more than 9999 pages', () => {
+    expect(pageName(1, 10000, 'a.webp')).toBe('00001.webp');
+    expect(pageName(10000, 10000, 'a.webp')).toBe('10000.webp');
+  });
+});
+
+describe('packVolume', () => {
+  const bytes = (...xs: number[]) => new Uint8Array(xs);
+  const files = [new File([bytes(1, 2, 3)], 'b.png'), new File([bytes(9, 8)], 'a.jpg')];
+  const volume = { name: 'Vol 1', pages: [{ index: 0, path: 'R/Vol 1/b.png' }, { index: 1, path: 'R/Vol 1/a.jpg' }] };
+
+  it('builds a real cbz named after the volume, its pages stored in order as 0001.png, 0002.jpg', async () => {
+    const cbz = await packVolume(volume, files);
+    expect(cbz.name).toBe('Vol 1.cbz');
+    const archive = await openComicArchive(cbz);
+    expect(archive.names).toEqual(['0001.png', '0002.jpg']);
+    expect(new Uint8Array(await (await archive.read('0001.png')).arrayBuffer())).toEqual(bytes(1, 2, 3));
+    expect(new Uint8Array(await (await archive.read('0002.jpg')).arrayBuffer())).toEqual(bytes(9, 8));
+    await archive.close();
+    expect((await readCbzInfo(cbz)).pages).toBe(2);
+  });
+
+  it('packs the same pages to the same bytes every time, so the book id does not change', async () => {
+    const a = new Uint8Array(await (await packVolume(volume, files)).arrayBuffer());
+    const b = new Uint8Array(await (await packVolume(volume, files)).arrayBuffer());
+    expect(a).toEqual(b);
   });
 });
