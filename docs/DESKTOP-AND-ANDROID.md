@@ -55,6 +55,10 @@ Release builds (`tauri android build --apk`) are unsigned and cannot be installe
 3. In the workflow, after `tauri android init`, decode the keystore to `$RUNNER_TEMP/upload.jks`, write `src-tauri/gen/android/keystore.properties` with `storeFile`, `password`, `keyAlias`, and edit `gen/android/app/build.gradle.kts` to read it into a `release` `signingConfig` (see the [Tauri Android signing guide](https://v2.tauri.app/distribute/sign/android/)). Drop `--debug` from the build command.
 4. Windows installers are unsigned too; SmartScreen will warn. Code signing needs a certificate (`bundle.windows.certificateThumbprint` or a signing command) stored as secrets in the same way.
 
+## Opening books from the file manager (Windows)
+
+The installer registers `.epub`, `.pdf`, `.cbz` and `.cbr` (`src-tauri/tauri.windows.conf.json`, so Android's manifest is untouched): "Open with" lists simple-reader, and it can be made the default there. A double-click starts the app with the path as an argument, or, if the app is already open, hands it over to that window (`tauri-plugin-single-instance`). The Rust side (`src-tauri/src/book_files.rs`) keeps the paths, and the page can read only those, through `take_opened_books` and `read_opened_book`. The page code is `src/native/desktop-open.ts`; Android keeps its own bridge (`incoming.ts`).
+
 ## Service worker note
 
 A PWA service worker must not be registered inside Tauri. Register it only on `http(s):` origins and skip the Tauri ones:
