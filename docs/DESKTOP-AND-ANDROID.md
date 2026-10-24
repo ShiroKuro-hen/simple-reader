@@ -44,16 +44,16 @@ Output: `src-tauri/gen/android/app/build/outputs/apk/`.
 2. Open it from the file manager and allow "Install unknown apps" for that file manager when asked.
 3. A phone with an arm64 CPU is required for the CI build (nearly every phone since 2017). For emulators (x86_64) build locally with `--target x86_64`.
 
-The debug APK is signed with the auto-generated debug key. It installs fine but is not suitable for Play Store, and updating requires the same debug key (reinstall otherwise).
+The CI build is a debug build (R8 would strip the JavaScript bridge of the "Open with" patch) that is re-signed with our own key, so each release can update the previous one in place. Builds without the key (a fork, a run without secrets) stay debug-signed and need an uninstall before the next release, which deletes the library.
 
-## Signing a release APK (not done yet)
+## The signing key
 
-Release builds (`tauri android build --apk`) are unsigned and cannot be installed until signed. To wire a real key through GitHub secrets, without ever committing it:
+- The key is a PKCS12 file made with OpenSSL (no Java needed), valid for 10000 days, alias `simple-reader`. Its public SHA-256 is pinned in `.github/workflows/tauri.yml`: a build signed with anything else fails.
+- Keep the keystore and its password somewhere safe (a password manager and an offline copy). **If they are lost the installed apps can never be updated**, only reinstalled.
+- It reaches CI through two repository secrets, never the repository: `ANDROID_KEYSTORE_BASE64` (`base64 -w0 upload.p12`) and `ANDROID_KEYSTORE_PASSWORD`.
+- Make a new key with `openssl req -x509 -newkey rsa:2048 -sha256 -days 10000 -nodes -keyout key.pem -out cert.pem -subj "/CN=simple-reader"` and `openssl pkcs12 -export -inkey key.pem -in cert.pem -name simple-reader -out upload.p12`, update the secrets and the pinned SHA-256 (`openssl x509 -in cert.pem -noout -fingerprint -sha256`). Phones then need one uninstall.
 
-1. Create a keystore locally: `keytool -genkey -v -keystore upload.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload`.
-2. Add repository secrets `ANDROID_KEYSTORE_BASE64` (`base64 -w0 upload.jks`), `ANDROID_KEY_ALIAS`, `ANDROID_KEYSTORE_PASSWORD` (and the key password if different).
-3. In the workflow, after `tauri android init`, decode the keystore to `$RUNNER_TEMP/upload.jks`, write `src-tauri/gen/android/keystore.properties` with `storeFile`, `password`, `keyAlias`, and edit `gen/android/app/build.gradle.kts` to read it into a `release` `signingConfig` (see the [Tauri Android signing guide](https://v2.tauri.app/distribute/sign/android/)). Drop `--debug` from the build command.
-4. Windows installers are unsigned too; SmartScreen will warn. Code signing needs a certificate (`bundle.windows.certificateThumbprint` or a signing command) stored as secrets in the same way.
+Windows installers are unsigned too; SmartScreen will warn. Code signing needs a certificate (`bundle.windows.certificateThumbprint` or a signing command) stored as secrets in the same way.
 
 ## Opening books from the file manager (Windows)
 
