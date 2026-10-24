@@ -32,6 +32,7 @@ const ICONS = {
   bookmark: 'M6 3h12v18l-6-4-6 4z',
   pencil: 'M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4z',
   download: 'M12 4v11M7 11l5 5 5-5M5 20h14',
+  search: 'M18 11a7 7 0 1 1-14 0 7 7 0 1 1 14 0M21 21l-4.3-4.3',
 } as const;
 
 export function icon(name: keyof typeof ICONS): SVGSVGElement {
