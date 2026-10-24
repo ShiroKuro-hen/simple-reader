@@ -286,24 +286,8 @@ await test('epub: single-page layout shows one page where auto shows two side by
   await ev(() => { document.getElementById('host').style.width = '1500px'; });
   await open('book-en.epub');
   const twoUp = (await nav('next')).fraction;
-  // A column is "side by side" when its text starts in the right half of the host. Measured on the page on screen,
-  // because one page of a single column now spans the whole window, so it can hold as much text as a spread.
-  const secondColumnShown = () => ev(() => {
-    const host = document.getElementById('host').getBoundingClientRect();
-    const doc = session.docs[0];
-    const frame = doc.defaultView.frameElement.getBoundingClientRect();
-    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_TEXT);
-    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-      if (!n.textContent.trim()) continue;
-      const range = doc.createRange();
-      range.selectNodeContents(n);
-      for (const q of range.getClientRects()) {
-        const left = frame.left + q.left;
-        if (q.width > 0 && left > host.left + host.width / 2 && frame.left + q.right <= host.right + 1) return true;
-      }
-    }
-    return false;
-  });
+  // foliate draws one header cell per column of the page: two side by side in a spread, one in single-page mode.
+  const secondColumnShown = () => ev(() => document.querySelector('foliate-view').renderer.heads.length > 1);
   await ev(() => session.handle.goToFraction(0));
   assert.ok(await secondColumnShown(), 'auto shows a second column side by side');
   await ev((s) => session.handle.setSettings(s), THEME('light', 100, 'single'));

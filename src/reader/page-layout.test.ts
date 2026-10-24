@@ -13,8 +13,11 @@ describe('pageLayout columns', () => {
   it('uses two columns on a landscape window (auto)', () => {
     expect(at(1280, 800).maxColumns).toBe(2);
     expect(at(1920, 1080).maxColumns).toBe(2);
-    expect(at(2560, 1440).maxColumns).toBe(2);
-    expect(at(3440, 1440).maxColumns).toBe(2);
+  });
+
+  it('adds a third column on very wide windows instead of stretching the lines', () => {
+    expect(at(2560, 1440).maxColumns).toBe(3);
+    expect(at(3440, 1440).maxColumns).toBe(3);
   });
 
   it('always uses one column when the layout is single', () => {
@@ -24,14 +27,15 @@ describe('pageLayout columns', () => {
 });
 
 describe('pageLayout measure (max inline size)', () => {
-  it('splits the whole width between the columns on a large window', () => {
-    expect(at(1920, 1080).maxInline).toBe(960);
-    expect(at(2560, 1440).maxInline).toBe(1280);
-    expect(at(3440, 1440).maxInline).toBe(1720);
+  it('splits the width between the columns, never past a comfortable line', () => {
+    expect(at(1920, 1080).maxInline).toBe(900);
+    expect(at(2560, 1440).maxInline).toBe(853);
+    expect(at(3440, 1440).maxInline).toBe(900);
   });
 
-  it('gives a single column the whole width', () => {
-    expect(at(1920, 1080, 'single').maxInline).toBe(1920);
+  it('caps a single column too, so a line or an illustration never spans a huge window', () => {
+    expect(at(1920, 1080, 'single').maxInline).toBe(900);
+    expect(at(1080, 1920).maxInline).toBe(900);
   });
 
   it('keeps the old 720 px floor on a small window', () => {
