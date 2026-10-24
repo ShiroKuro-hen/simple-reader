@@ -48,5 +48,6 @@ export default defineConfig({
   build: { target: 'es2022' },
   plugins: [serviceWorker()],
   define: { __APP_VERSION__: JSON.stringify(pkg.version) },
-  test: { environment: 'node' },
+  // Node tests read PDFs with pdf.js's legacy build: its main build needs APIs that Node does not have yet.
+  test: { environment: 'node', alias: [{ find: /^pdfjs-dist$/, replacement: 'pdfjs-dist/legacy/build/pdf.mjs' }] },
 });

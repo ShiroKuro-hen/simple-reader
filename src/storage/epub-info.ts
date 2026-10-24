@@ -18,7 +18,7 @@ export interface EpubInfo {
 
 const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 
-const decode = (s: string) =>
+export const decode = (s: string) =>
   s
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
     .replace(/&(?:#x([0-9a-f]+)|#(\d+)|(\w+));/gi, (m, hex, dec, name) =>
@@ -65,8 +65,28 @@ export function parseOpf(xml: string, opfPath: string): OpfInfo {
   };
 }
 
-/** Throws if `file` is not a readable EPUB (not a zip, no container.xml, no package document). */
-export async function readEpubInfo(file: Blob): Promise<EpubInfo> {
+/** The documents of the spine, in reading order, as paths in the zip. A spine item the manifest does not list is skipped. */
+export function parseSpine(xml: string, opfPath: string): string[] {
+  const hrefs = new Map<string, string>();
+  for (const m of xml.matchAll(/<item\b[^>]*>/gi)) {
+    const item = attrs(m[0]);
+    if (item.id && item.href) hrefs.set(item.id, resolvePath(opfPath, item.href));
+  }
+  return [...xml.matchAll(/<itemref\b[^>]*>/gi)].flatMap((m) => hrefs.get(attrs(m[0]).idref ?? '') ?? []);
+}
+
+/** An EPUB's package document, and its files by path in the zip. */
+export interface EpubPackage {
+  opfPath: string;
+  opf: string;
+  /** The text of a file, or null when the EPUB has no such file. */
+  text(name: string): Promise<string | null>;
+  /** The bytes of a file, typed `type`, or undefined when the EPUB has no such file. */
+  blob(name: string, type?: string): Promise<Blob | undefined>;
+}
+
+/** Runs `use` with the package document of the EPUB `file`; the zip is closed afterwards. Throws if `file` is not an EPUB. */
+export async function withEpub<T>(file: Blob, use: (pkg: EpubPackage) => Promise<T>): Promise<T> {
   configure({ useWebWorkers: false });
   const reader = new ZipReader(new BlobReader(file));
   try {
@@ -75,17 +95,26 @@ export async function readEpubInfo(file: Blob): Promise<EpubInfo> {
       const entry = entries.get(name);
       return entry ? entry.getData(new TextWriter()) : null;
     };
+    const blob = async (name: string, type?: string): Promise<Blob | undefined> => {
+      const entry = entries.get(name);
+      return entry ? entry.getData(new BlobWriter(type)) : undefined;
+    };
     const container = await text('META-INF/container.xml');
     const opfPath = container && parseContainer(container);
     if (!opfPath) throw new Error('no container.xml / rootfile');
     const opf = await text(opfPath);
     if (!opf) throw new Error(`missing package document ${opfPath}`);
-
-    const info = parseOpf(opf, opfPath);
-    const coverEntry = info.coverPath ? entries.get(info.coverPath) : undefined;
-    const cover = coverEntry ? await coverEntry.getData(new BlobWriter(info.coverType)) : undefined;
-    return { title: info.title, author: info.author, cover };
+    return await use({ opfPath, opf, text, blob });
   } finally {
     await reader.close();
   }
+}
+
+/** Throws if `file` is not a readable EPUB (not a zip, no container.xml, no package document). */
+export function readEpubInfo(file: Blob): Promise<EpubInfo> {
+  return withEpub(file, async ({ opf, opfPath, blob }) => {
+    const info = parseOpf(opf, opfPath);
+    const cover = info.coverPath ? await blob(info.coverPath, info.coverType) : undefined;
+    return { title: info.title, author: info.author, cover };
+  });
 }

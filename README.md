@@ -31,7 +31,7 @@ Most readers either do a lot and get in the way, or do little and send your libr
 - **Japanese support:** hiragana reading and romaji on select, plus a furigana-over-kanji mode.
 - **Local-first:** books are files on your device (browser OPFS). No account, no database.
 - **Highlights, notes and bookmarks:** four highlight colours and notes on EPUB and PDF text, page bookmarks, a side panel to browse and jump, and export to Markdown (with a copy button) for your notes app.
-- **Library:** search by title, author, series or tag (accent-insensitive, Japanese-safe), tags, sorting, recently read, and series shown as one card with their volumes inside.
+- **Library:** search by title, author, series or category (accent-insensitive, Japanese-safe), your own categories (they vanish when empty), favorites, a "Continue reading" shelf, sorting, and series shown as one card with their volumes inside. "Search inside books" looks through the text of every EPUB and PDF (the text is cached on your device).
 - **Optional backup/sync** to your own free Cloudflare R2 bucket. It never deletes anything; the newest reading progress wins and highlights are merged one by one, so two devices never lose each other's notes.
 - **Installable and offline:** a PWA that opens without a connection once visited. Japanese reading works offline after the first Japanese lookup.
 - **Runs as a web app** in the browser, with Windows and Android builds produced by CI (see below).
@@ -107,9 +107,9 @@ Taken from [PLAN.md](PLAN.md) (written in Spanish). Checked means it exists toda
 - [x] Open EPUB and PDF, paginated reading, themes, font size, remember position
 - [x] Word lookup with Spanish translation, Japanese reading, romaji and furigana
 - [x] Optional R2 backup and sync
-- [x] Library search, tags and sorting
+- [x] Library search, categories, favorites, recents, sorting, and search inside all books
 - [x] Manga (CBZ and CBR): right-to-left, double page, zoom, page preloading
-- [ ] Manga: image folders, vertical (webtoon) scroll
+- [x] Manga: folders of images become CBZ volumes (Add folder), and a vertical (webtoon) scroll mode
 - [x] Right-to-left and vertical EPUB: page-turn keys follow the book, and Settings > Text direction can force horizontal
 - [x] In-book search in EPUB (Ctrl+F): results by chapter, highlighted, tap to jump
 - [x] Highlights, notes and bookmarks in EPUB and PDF

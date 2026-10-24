@@ -1,5 +1,6 @@
 import { bookmarkOn, createAnnotation, editAnnotation, mergeAnnotationFiles, previewText, putAnnotation, removeAnnotation, upsertMark } from '../annotations';
 import type { Annotation, BookMeta, HighlightColor, Progress, ReaderHandle, ReaderSettings, TextDirection, TextSelection, TocItem, ViewSettings } from '../types';
+import { takePendingFind } from '../library/pending-find';
 import { getAnnotations, getBookBlob, getProgress, saveAnnotations, saveProgress, setWriting } from '../storage/library';
 import { createAnnotationsPanel } from './annotations-panel';
 import { h, icon, iconButton, sheet, toast } from './dom';
@@ -79,6 +80,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
   bookmarkBtn.disabled = true;
   bookmarkBtn.setAttribute('aria-pressed', 'false');
   const searchable = book.format === 'epub' || book.format === 'pdf';
+  const findQuery = takePendingFind(book.id); // a search made in the library for this book, opened once the book is shown
   const searchPanel = createSearchPanel({
     run: (query) => handle?.search?.(query),
     clear: () => handle?.clearSearch?.(),
@@ -322,6 +324,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
       });
       slider.disabled = false;
       if (searchBtn) searchBtn.disabled = false;
+      if (findQuery) searchPanel.open(findQuery);
       if (opened.toc.length) {
         buildToc(opened.toc);
         tocBtn.disabled = false;

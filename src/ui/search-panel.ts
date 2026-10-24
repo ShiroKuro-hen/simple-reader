@@ -133,8 +133,13 @@ export function createSearchPanel(on: {
 
   return {
     el: dlg,
-    open() {
+    /** Opens the panel; a `query` (from the library's search) is filled in and run at once. */
+    open(query = '') {
       dlg.showModal();
+      if (query) {
+        input.value = query;
+        void search(query);
+      }
       input.focus(); // the close button comes first in the dialog, so the input needs an explicit focus
     },
   };
