@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "fileAssociations": [
+      { "ext": ["epub"], "mimeType": "application/epub+zip", "description": "EPUB book" },
+      { "ext": ["pdf"], "mimeType": "application/pdf", "description": "PDF document" },
+      { "ext": ["cbz"], "mimeType": "application/vnd.comicbook+zip", "description": "Comic book (ZIP)" },
+      { "ext": ["cbr"], "mimeType": "application/vnd.comicbook-rar", "description": "Comic book (RAR)" }
+    ]
+  }
+}

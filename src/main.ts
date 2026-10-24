@@ -107,10 +107,11 @@ async function boot() {
   addEventListener('hashchange', () => void route());
   await route();
 
-  // Android "Open with" / "Share": show the library (redrawn, so the new books appear) once they are imported.
+  // "Open with" / "Share" (Android) and double-clicked books (desktop): show the library, redrawn so the new books appear, once imported.
   if ('__TAURI_INTERNALS__' in window) {
     const showLibrary = () => (location.hash ? (location.hash = '') : dispatchEvent(new HashChangeEvent('hashchange')));
     void import('./native/incoming').then((m) => m.listenForIncoming(showLibrary));
+    void import('./native/desktop-open').then((m) => m.listenForOpenedBooks(showLibrary));
   }
 }
 
