@@ -58,7 +58,7 @@ jobs:
       - run: npx tauri android init --ci
       # "Open with" / "Share to": adds intent filters, the MainActivity hooks and Incoming.kt. Fails if the template changed.
       - run: node src-tauri/android-patches/apply.mjs
-      # Debug build: signed with the auto-generated debug key, so the APK is installable as is.
+      # A debug build (R8 would strip the JavaScript bridge of the "Open with" patch), signed below with our own key.
       - run: npx tauri android build --apk --debug --target aarch64
       - name: The APK must declare the Open with / Share filters
         run: |
@@ -68,14 +68,36 @@ jobs:
             echo "$manifest" | grep -q "$action" || { echo "missing $action in the built manifest"; exit 1; }
           done
           unzip -p "$apk" 'classes*.dex' | grep -aq SRIntent || { echo "Incoming.kt is not in the dex"; exit 1; }
+      # Android only updates an app when the new APK has the same signing key. The debug key changes with every CI
+      # runner, so without our own key each release would need an uninstall first, which deletes the library.
+      - name: Sign the APK with the release key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          # Public SHA-256 of our certificate: a different key (or none) must fail the build, not ship quietly.
+          EXPECTED_SHA256: f96fe8e98a5f7ee5c85f0cfbd8196c8d405bb85bd021b9d17fac09978470f407
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "::warning::No signing key in this run: the APK keeps its debug signature and cannot update an installed release"
+            exit 0
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.p12"
+          apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          for apk in $(find src-tauri/gen/android/app/build/outputs/apk -name '*.apk'); do
+            "$apksigner" sign --ks "$RUNNER_TEMP/release.p12" --ks-type PKCS12 --ks-key-alias simple-reader --ks-pass env:KEYSTORE_PASSWORD "$apk"
+            actual=$("$apksigner" verify --print-certs "$apk" | sed -n 's/.*certificate SHA-256 digest: //p' | head -n1)
+            echo "$apk signed with $actual"
+            [ "$actual" = "$EXPECTED_SHA256" ] || { echo "unexpected signing certificate"; exit 1; }
+          done
+          rm -f "$RUNNER_TEMP/release.p12"
       - uses: actions/upload-artifact@v4
         with:
           name: simple-reader-android
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
           if-no-files-found: error
 
-  # Pushing a tag like v0.2.0 publishes both builds on a GitHub Release. They are unsigned
-  # (debug-signed APK, no Windows code signing), so the release is marked as a pre-release.
+  # Pushing a tag like v0.2.0 publishes both builds on a GitHub Release. The APK is signed with our own key (see
+  # above); there is no Windows code signing, so the release is marked as a pre-release.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [windows, android]
