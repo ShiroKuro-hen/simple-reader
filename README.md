@@ -111,12 +111,13 @@ Taken from [PLAN.md](PLAN.md) (written in Spanish). Checked means it exists toda
 - [x] Manga (CBZ and CBR): right-to-left, double page, zoom, page preloading
 - [ ] Manga: image folders, vertical (webtoon) scroll
 - [x] Right-to-left and vertical EPUB: page-turn keys follow the book, and Settings > Text direction can force horizontal
-- [ ] In-book search
+- [x] In-book search in EPUB (Ctrl+F): results by chapter, highlighted, tap to jump
 - [x] Highlights, notes and bookmarks in EPUB (PDF: bookmarks only; PDF highlights pending)
 - [x] Library series: a folder of volumes in your R2 bucket imports as one series (Settings > Import folders)
 - [x] Library: add a whole folder from the device (Add folder): the folder name becomes the series, and you pick EPUB, PDF and/or CBZ
 - [x] PWA with offline support
-- [ ] Desktop and Android: CI builds exist; test on real devices, sign releases, check lookups under the native origin
+- [x] Windows: double-click or "Open with" imports the book (EPUB, PDF, CBZ, CBR)
+- [ ] Android: sign releases with the fixed key (see docs/DESKTOP-AND-ANDROID.md), test on a real phone
 - [ ] Optional: custom CSS and remappable keys, user dictionary
 
 Out of scope on purpose: local API, CLI, rules, plugins, TTS, OCR, OPDS, extra sync backends.
