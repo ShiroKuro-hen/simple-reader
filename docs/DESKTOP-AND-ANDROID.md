@@ -75,3 +75,7 @@ Tauri already serves assets from the app bundle, and a service worker would cach
 - No `Cargo.lock` is committed yet; the first local `cargo` run creates one, commit it for reproducible builds.
 - Only the arm64 APK is built in CI. File associations (`.epub`/`.pdf`) and a folder-watching feature are not wired up.
 - App-level checks were run on CI only (builds); the APK has not been run on a device or emulator.
+
+## The icon
+
+The sources are `public/icon.svg` (the app icon) and `src-tauri/icons/source/foreground.svg` (the Android adaptive foreground; its background colour is in `src-tauri/icons/android/values/ic_launcher_background.xml`). To change the logo, edit them, render `icon.svg` to a 1024 px PNG and run `npx tauri icon <png>`, then render the foreground at 108/162/216/324/432 px into the `mipmap-*/ic_launcher_foreground.png` files and refresh `public/icons/`.

@@ -34,7 +34,7 @@ Hecho: CBZ (derecha a izquierda, doble página, zoom, precarga), aviso de versi�
 
 ### B. Lectura de texto
 - **RTL y escritura vertical** en EPUB: hecho. Las teclas y los bordes siguen la dirección del libro, y Ajustes > Dirección del texto permite forzar horizontal.
-- **Resaltados en PDF** (hoy solo marcadores).
+- **Resaltados en PDF**: hecho (la ubicación guarda página y cajas por línea, en fracciones de la página).
 - **Búsqueda dentro del libro** (EPUB): hecho. Ctrl+F, resultados por capítulo, resaltado y salto al tocar.
 
 ### C. Biblioteca

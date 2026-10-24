@@ -30,4 +30,9 @@ describe('parsePage', () => {
     expect(parsePage(undefined, 6)).toBe(1);
     expect(parsePage('epubcfi(/6/4!/4/2)', 6)).toBe(1);
   });
+  it('goes to the page of a PDF highlight', () => {
+    expect(parsePage('4@0.1000,0.2000,0.3000,0.0500', 6)).toBe(4);
+    expect(parsePage('9@0.1000,0.2000,0.3000,0.0500', 6)).toBe(6);
+    expect(parsePage('4@garbage', 6)).toBe(1);
+  });
 });

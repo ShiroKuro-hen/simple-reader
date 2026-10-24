@@ -578,14 +578,14 @@ await test('epub: a selection across furigana has the base text only, in text an
   assert.equal(sel.context, '今日は漢字を読む。');
 });
 
-await test('pdf: here() names the page and its first words; selections have no location; setAnnotations is harmless', async () => {
+await test('pdf: here() names the page and its first words; a selection is located on its page; setAnnotations is harmless', async () => {
   await open('sample.pdf', { location: '3' });
   const here = await ev(() => session.handle.here());
   assert.equal(here.location, '3');
   assert.equal(here.label, 'Page 3');
   assert.match(here.text, /^Page 3 heading/);
   const { sel } = await selectWord('harbour');
-  assert.equal(sel.location, undefined);
+  assert.match(sel.location, /^3@\d\.\d{4},\d\.\d{4},\d\.\d{4},\d\.\d{4}/);
   await setAnnotations([note('3', 'harbour')]);
   await ev(() => session.handle.onAnnotationClick(() => {}));
   assert.equal(await ev(() => document.querySelectorAll('.sr-pdf svg').length), 0);
