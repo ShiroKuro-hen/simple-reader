@@ -9,10 +9,11 @@ import { addTag, cleanTags, FAVORITES, isFavorite, liveSelection, MAX_TAG_LENGTH
 import { countLabel, libraryView } from '../library/view';
 import type { InstallPrompt } from '../pwa/install';
 import { excerptParts } from '../reader/search-results';
-import { addBook, cloudIds, getBookText, getProgress, listBooks, removeBook, setTags } from '../storage/library';
+import { addBook, cloudIds, getBookText, getProgress, listBooks, removeBook, saveProgress, setTags } from '../storage/library';
 import { coverInitial, titleHue } from './cover';
 import { h, icon, iconButton, sheet, toast } from './dom';
 import type { Entry } from '../library/series';
+import { isRead, withReadMark } from '../library/volumes';
 import { libIcon } from './library-icons';
 import { bookLabel } from './reading';
 import { createSettings, type App } from './settings';
@@ -393,7 +394,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
         h('ul', { class: 'grid' }, ...series.books.map((b) => card(b))));
     } else {
       // "Continue reading" only on the plain library: no search text, no category and no open series.
-      const recent = !query.trim() && !selected.length ? recentBooks(books, new Map([...progress].map(([id, p]): [string, number] => [id, p.updatedAt]))) : [];
+      const recent = !query.trim() && !selected.length ? recentBooks(books.filter((b) => !isRead(progress.get(b.id))), new Map([...progress].map(([id, p]): [string, number] => [id, p.updatedAt]))) : [];
       results.replaceChildren(
         ...(recent.length ? [h('section', { class: 'shelf', 'aria-labelledby': 'shelf-title' },
           h('h2', { id: 'shelf-title' }, 'Continue reading'),
@@ -460,6 +461,10 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     const star = h('button', { class: 'icon-btn card-fav', type: 'button', 'aria-pressed': String(fav),
       'aria-label': `${fav ? 'Remove' : 'Add'} ${b.title} ${fav ? 'from' : 'to'} favorites`, title: fav ? 'Remove from favorites' : 'Add to favorites',
       onclick: () => void setFavorite(b) }, libIcon('star'));
+    const done = isRead(p);
+    const readBtn = h('button', { class: 'icon-btn card-read', type: 'button', 'aria-pressed': String(done),
+      'aria-label': `Mark ${b.title} as ${done ? 'unread' : 'read'}`, title: done ? 'Mark as unread' : 'Mark as read',
+      onclick: () => void setRead(b) }, libIcon('check'));
     const cancel = h('button', { class: 'btn', type: 'button' }, 'Cancel');
     const li = h('li', { class: 'card', 'data-book': b.id }, open);
     const toggle = (on: boolean) => {
@@ -469,6 +474,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     cancel.onclick = () => toggle(false);
     li.append(
       star,
+      readBtn,
       iconButton('trash', `Remove ${b.title}`, () => toggle(true), 'card-remove'),
       h('button', { class: 'icon-btn card-tags', type: 'button', 'aria-label': `Edit categories of ${b.title}`, title: 'Edit categories', onclick: () => editTags(b) }, libIcon('tag')),
       h('div', { class: 'confirm' },
@@ -498,6 +504,17 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     }
     await refresh();
     main.querySelector<HTMLElement>(`[data-book="${b.id}"] .card-fav`)?.focus();
+  }
+
+  /** Marks a book read, or puts it back to unread. The refresh redraws the card, so focus goes back to its button. */
+  async function setRead(b: BookMeta) {
+    try {
+      await saveProgress(withReadMark(progress.get(b.id) ?? null, b.id, !isRead(progress.get(b.id)), Date.now()));
+    } catch {
+      return toast("Couldn't save that.", 'error');
+    }
+    await refresh();
+    main.querySelector<HTMLElement>(`[data-book="${b.id}"] .card-read`)?.focus();
   }
 
   /** A small dialog to add and remove one book's categories. Every change is saved at once; the library behind it refreshes. */

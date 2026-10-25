@@ -821,3 +821,16 @@ dialog.sheet-notes[open], dialog.sheet-search[open] { animation: slide-in-right 
 .card-origin { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 4px 6px; font-size: 11px; line-height: 1.2; color: #fff; background: rgba(0, 0, 0, 0.62); }
 .card-origin[data-origin='cloud'] { background: color-mix(in srgb, var(--accent) 78%, #000); }
 .card-origin .icon { width: 13px; height: 13px; flex: none; }
+
+/* Mark a volume read: under the star (a narrow card has no room for a fourth button along the top). Shown on hover like the other card buttons, and always while it is on. */
+.card-read { position: absolute; top: 46px; left: 2px; color: #fff; opacity: 0; transition: opacity 0.15s; }
+.card-read .icon { width: 30px; height: 30px; padding: 6px; border-radius: 50%; background: rgba(0, 0, 0, 0.6); }
+.card-read:hover { background: transparent; }
+.card-read[aria-pressed='true'] { opacity: 1; }
+.card-read[aria-pressed='true'] .icon { background: #2e7d4f; }
+.card:hover .card-read, .card:focus-within .card-read { opacity: 1; }
+@media (hover: none) { .card-read { opacity: 1; } }
+
+/* The offer of the next volume at the end of one: floats over the page, above the bottom bar. */
+.next-volume { position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); padding: 8px 8px 8px 16px; border-radius: 999px; background: var(--surface); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow-lg); font-size: 14px; }
+.next-volume .btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

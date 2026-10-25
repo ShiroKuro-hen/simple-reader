@@ -207,7 +207,7 @@ async (page, ctx = {}) => {
       return !!img && img.complete && img.naturalWidth > 0;
     }), 'the series cover to decode');
     await page.getByRole('button', { name: `Open series ${SERIES}, 4 volumes` }).click();
-    await until(async () => (await gridTitles()).join('|') === [SERIES, 'extras', 'Vol 1', 'Vol 2'].join('|'), 'the four volumes in order: ' + (await gridTitles()).join('|'));
+    await until(async () => (await gridTitles()).join('|') === ['Vol 1', 'Vol 2', SERIES, 'extras'].join('|'), 'the four volumes in order: ' + (await gridTitles()).join('|'));
     await until(() => page.evaluate(() => {
       const imgs = [...document.querySelectorAll('.grid .cover img')];
       return imgs.length === 4 && imgs.every((i) => i.complete && i.naturalWidth > 0);
