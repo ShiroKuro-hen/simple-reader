@@ -834,3 +834,4 @@ dialog.sheet-notes[open], dialog.sheet-search[open] { animation: slide-in-right 
 /* The offer of the next volume at the end of one: floats over the page, above the bottom bar. */
 .next-volume { position: absolute; left: 50%; bottom: 104px; transform: translateX(-50%); z-index: 5; display: flex; align-items: center; gap: 10px; max-width: calc(100% - 24px); padding: 8px 8px 8px 16px; border-radius: 999px; background: var(--surface); color: var(--text); border: 1px solid var(--line); box-shadow: var(--shadow-lg); font-size: 14px; }
 .next-volume .btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.card-origin[data-origin='cloud-only'] { background: color-mix(in srgb, var(--accent) 45%, #000); font-style: italic; }

@@ -108,10 +108,11 @@ export function createSettings(
       hint.hidden = true;
     } catch (e) {
       const label = kind === 'push' ? 'Backup' : kind === 'pull' ? 'Restore' : 'Import';
-      say(`${label} failed: ${e instanceof Error ? e.message : 'unknown error'}`, true);
+      // The hint goes up before the message: whoever sees the message finds the hint already there.
       corsPre.textContent = (await import('../sync/r2')).describeCors();
       hint.hidden = false;
       hint.open = true;
+      say(`${label} failed: ${e instanceof Error ? e.message : 'unknown error'}`, true);
     } finally {
       busyBtns.forEach((b) => (b.disabled = false));
     }
