@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { BookMeta } from '../types';
-import { groupBySeries, seriesFromKey, volumeOrder } from './series';
+import { groupBySeries, seriesFromKey, volumeNumber, volumeOrder } from './series';
 
 const book = (id: string, extra: Partial<BookMeta> = {}): BookMeta => ({ id, title: id, format: 'epub', size: 1, addedAt: 1, ...extra });
 const ids = (bs: readonly BookMeta[]) => bs.map((b) => b.id);
@@ -114,5 +114,44 @@ describe('groupBySeries', () => {
     const bs = [book('b', { title: 'Vol 2', series: 'S' }), book('a', { title: 'Vol 1', series: 'S' })];
     groupBySeries(bs);
     expect(ids(bs)).toEqual(['b', 'a']);
+  });
+});
+
+describe('volumeNumber: the volume a title says it is', () => {
+  it.each([
+    ['Ichi the Witch - Tomo 04 (#016-034)', 4], // the number after the word, not the chapter range
+    ['Lord of the Mysteries [WN] - Vol 02', 2], // nothing inside [brackets]
+    ['86 -Eighty Six- Vol 3', 3], // a title that starts with a number still follows its "Vol"
+    ['01 青春ブタ野郎はバニーガール先輩の夢を見ない', 1], // a leading number
+    ['薬屋のひとりごと１０', 10], // full-width digits
+    ['薬屋のひとりごと 第3巻', 3],
+    ['El archivo de las tormentas 2.5 - Danzante del Filo', 2.5], // a half volume
+    ['Shadow Slave - C0101-0200', 101], // otherwise the first number
+  ])('%s -> %s', (title, n) => expect(volumeNumber(title)).toBe(n));
+
+  it('is undefined when the title has no number', () => {
+    expect(volumeNumber('Nacidos de la bruma - Historia Secreta')).toBeUndefined();
+  });
+});
+
+describe('volumeOrder by volume number', () => {
+  const order = (titles: string[]) => volumeOrder(titles.map((t) => book(t, { title: t }))).map((b) => b.title);
+
+  it('puts full-width numbers in numeric order, which the plain collator does not', () => {
+    expect(order(['薬屋のひとりごと１０', '薬屋のひとりごと２', '薬屋のひとりごと１', '薬屋のひとりごと１１'])).toEqual([
+      '薬屋のひとりごと１', '薬屋のひとりごと２', '薬屋のひとりごと１０', '薬屋のひとりごと１１',
+    ]);
+  });
+
+  it('puts a half volume between its neighbours', () => {
+    expect(order(['Storm 3 - C', 'Storm 2.5 - B', 'Storm 2 - A'])).toEqual(['Storm 2 - A', 'Storm 2.5 - B', 'Storm 3 - C']);
+  });
+
+  it('puts numbered volumes first and the ones without a number after them, by title', () => {
+    expect(order(['Special B', 'Vol 2', 'Special A', 'Vol 1'])).toEqual(['Vol 1', 'Vol 2', 'Special A', 'Special B']);
+  });
+
+  it('orders a volume by its number even when the titles differ in length or wording', () => {
+    expect(order(['Z Vol 2', 'A Vol 10', 'M Vol 1'])).toEqual(['M Vol 1', 'Z Vol 2', 'A Vol 10']);
   });
 });

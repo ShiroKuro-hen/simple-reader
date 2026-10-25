@@ -16,9 +16,24 @@ export function seriesFromKey(key: string): { series: string; file: string } | n
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
-/** Volumes in reading order: natural title order ("Vol 2" before "Vol 10"), then the older import first. Returns a new array. */
+const AFTER_WORD = /\b(?:vol(?:ume|\.)?|tomo|book|libro)\s*(\d+(?:\.\d+)?)/i;
+const KANJI = /(\d+)\s*巻/;
+const FIRST_NUMBER = /\d+(?:\.\d+)?/;
+
+/**
+ * The volume a title says it is: the number after "Vol", "Tomo", "Book" or before 巻, else the first number. Full-width digits
+ * count, [tags] do not, and "2.5" is a half volume. Undefined when the title has no number.
+ */
+export function volumeNumber(title: string): number | undefined {
+  const t = title.normalize('NFKC').replace(/\[[^\]]*\]/g, ' ');
+  const found = AFTER_WORD.exec(t)?.[1] ?? KANJI.exec(t)?.[1] ?? FIRST_NUMBER.exec(t)?.[0];
+  return found === undefined ? undefined : parseFloat(found);
+}
+
+/** Volumes in reading order: by volume number, then natural title order, then the older import first. Returns a new array. */
 export function volumeOrder(books: readonly BookMeta[]): BookMeta[] {
-  return [...books].sort((a, b) => collator.compare(a.title, b.title) || a.addedAt - b.addedAt);
+  const number = new Map(books.map((b) => [b, volumeNumber(b.title) ?? Infinity]));
+  return [...books].sort((a, b) => (number.get(a)! === number.get(b)! ? 0 : number.get(a)! - number.get(b)!) || collator.compare(a.title, b.title) || a.addedAt - b.addedAt);
 }
 
 export type Entry = { kind: 'book'; book: BookMeta } | { kind: 'series'; name: string; books: BookMeta[] };

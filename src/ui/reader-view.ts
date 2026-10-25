@@ -1,7 +1,8 @@
 import { bookmarkOn, createAnnotation, editAnnotation, mergeAnnotationFiles, previewText, putAnnotation, removeAnnotation, upsertMark } from '../annotations';
 import type { Annotation, BookMeta, HighlightColor, Progress, ReaderHandle, ReaderSettings, TextDirection, TextSelection, TocItem, ViewSettings } from '../types';
 import { takePendingFind } from '../library/pending-find';
-import { getAnnotations, getBookBlob, getProgress, saveAnnotations, saveProgress, setWriting } from '../storage/library';
+import { FINISHED, nextVolume } from '../library/volumes';
+import { getAnnotations, getBookBlob, getProgress, listBooks, saveAnnotations, saveProgress, setWriting } from '../storage/library';
 import { createAnnotationsPanel } from './annotations-panel';
 import { h, icon, iconButton, sheet, toast } from './dom';
 import { createPopup } from './popup';
@@ -12,7 +13,7 @@ import { debounce } from './timing';
 
 const HIDE_AFTER_MS = 3500;
 
-export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack: () => void): () => void {
+export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack: () => void, onOpen: (id: string) => void): () => void {
   const ac = new AbortController();
   const docs = new Set<Document>(); // rendered EPUB documents, kept so furigana can be re-applied
   let direction: TextDirection = book.writing ?? 'book'; // this book's EPUB text direction
@@ -283,16 +284,32 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
     slider.style.setProperty('--fill', `${sliderPosition(fraction) / 10}%`);
   }
 
+  // --- next volume ---
+  let next: BookMeta | undefined; // the volume after this one in its series, known once the library is read
+  let offered = false;
+  /** At the end of a volume, offers the next one once (a tap opens it; the cross dismisses the offer). */
+  function offerNext() {
+    if (!next || offered) return;
+    offered = true;
+    const banner = h('div', { class: 'next-volume', role: 'status' },
+      h('span', {}, 'You finished this volume.'),
+      h('button', { class: 'btn primary', type: 'button', onclick: () => onOpen(next!.id) }, `Next: ${next.title}`),
+      iconButton('close', 'Dismiss', () => banner.remove()));
+    view.append(banner);
+  }
+
   // --- open ---
   void (async () => {
     try {
-      const [{ openBook }, blob, saved, notes] = await Promise.all([
+      const [{ openBook }, blob, saved, notes, library] = await Promise.all([
         import('../reader/index'),
         getBookBlob(book.id),
         getProgress(book.id).catch(() => null),
         getAnnotations(book.id).catch(() => ({ bookId: book.id, items: [] as Annotation[] })),
+        listBooks().catch(() => [] as BookMeta[]),
       ]);
       if (disposed) return;
+      next = nextVolume(library, book.id);
       if (app.settings.furigana !== 'off') void preloadJapanese();
       const opened = await openBook(blob, book.format, stage, {
         settings: viewOf(app.settings),
@@ -321,6 +338,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
         showBookmarkState();
         if (!dragging) showFraction(p.fraction);
         persist({ bookId: book.id, location: p.location, fraction: p.fraction, updatedAt: Date.now() });
+        if (p.fraction >= FINISHED) offerNext();
       });
       slider.disabled = false;
       if (searchBtn) searchBtn.disabled = false;

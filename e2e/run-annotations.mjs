@@ -14,7 +14,7 @@ const server = await createServer({ root: repoRoot, logLevel: 'error', optimizeD
 await server.listen();
 const BASE = server.resolvedUrls.local[0];
 const browser = await launchChromium(pw);
-const specs = ['app.e2e.js', 'library-organise.e2e.js', 'library-origin.e2e.js', 'library-search.e2e.js', 'annotations.e2e.js', 'word-select.e2e.js', 'layout.e2e.js', 'search.e2e.js', 'pdf-highlights.e2e.js', 'pdf-search.e2e.js', 'webtoon.e2e.js', ...(process.env.REAL_EPUB ? ['real-annotations.e2e.js'] : [])];
+const specs = ['app.e2e.js', 'library-organise.e2e.js', 'library-origin.e2e.js', 'volumes.e2e.js', 'library-search.e2e.js', 'annotations.e2e.js', 'word-select.e2e.js', 'layout.e2e.js', 'search.e2e.js', 'pdf-highlights.e2e.js', 'pdf-search.e2e.js', 'webtoon.e2e.js', ...(process.env.REAL_EPUB ? ['real-annotations.e2e.js'] : [])];
 let failed = 0;
 // Layout screenshots: LAYOUT_SHOTS picks the folder; the default is a temp folder.
 const shots = process.env.LAYOUT_SHOTS ?? join(tmpdir(), 'simple-reader-layout-shots');

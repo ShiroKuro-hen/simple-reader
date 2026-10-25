@@ -85,6 +85,8 @@ async function boot() {
     location.hash = `#/book/${id}`;
   };
   const back = () => (inApp ? history.back() : (location.hash = ''));
+  // The next volume takes the place of this one in the history, so Back from it goes to the library, not to the volume just read.
+  const openNext = (id: string) => location.replace(`#/book/${id}`);
 
   async function route() {
     const run = ++routing;
@@ -102,7 +104,7 @@ async function boot() {
       location.hash = '';
       return;
     }
-    unmount = mountReader(root, book, app, back);
+    unmount = mountReader(root, book, app, back, openNext);
   }
 
   addEventListener('hashchange', () => void route());
