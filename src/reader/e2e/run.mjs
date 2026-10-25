@@ -959,6 +959,36 @@ for (const writing of ['book', 'horizontal']) {
   });
 }
 
+// A light novel mixes vertical text with horizontal image pages. The spine reads right to left as a whole, so the
+// arrow keys and the edge zones must not flip when a page happens to be a horizontal one.
+const sectionMode = () => ev(() => document.querySelector('foliate-view').renderer.direction.writingMode);
+const PLATES = [[0, 'vertical-rl'], [1, 'horizontal-tb'], [2, 'vertical-rl']];
+const goToSection = async (i) => nav('goTo', await ev((i) => session.handle.toc[i].href, i));
+await test('vertical epub with image plates: rtl() stays true on every page, text or image', async () => {
+  await open('book-ja-plates.epub', { settings: WRITING('book') });
+  for (const [section, mode] of [...PLATES.slice(1), PLATES[0]]) {
+    await goToSection(section);
+    assert.equal(await sectionMode(), mode, `section ${section}`);
+    assert.equal(await rtlNow(), true, `rtl() on section ${section} (${mode})`);
+  }
+});
+
+await test('vertical epub with image plates: an image page is centred in the window, both ways', async () => {
+  await open('book-ja-plates.epub', { settings: WRITING('book') });
+  await goToSection(1);
+  assert.equal(await sectionMode(), 'horizontal-tb');
+  const box = await ev(() => {
+    const view = document.querySelector('foliate-view').getBoundingClientRect();
+    const { doc } = document.querySelector('foliate-view').renderer.getContents()[0];
+    const f = doc.defaultView.frameElement.getBoundingClientRect();
+    const r = doc.querySelector('svg').getBoundingClientRect();
+    return { dx: f.left + r.left + r.width / 2 - (view.left + view.width / 2), dy: f.top + r.top + r.height / 2 - (view.top + view.height / 2), w: r.width };
+  });
+  assert.ok(box.w > 100, `the image is drawn (${box.w}px wide)`);
+  near(box.dx, 0, 3, 'horizontal offset of the image from the window centre');
+  near(box.dy, 0, 3, 'vertical offset of the image from the window centre');
+});
+
 await test('plain horizontal epub: book and horizontal modes render the same text, writing mode and rtl() unchanged', async () => {
   await open('book-en.epub', { settings: WRITING('book') });
   assert.equal(await writingModeOfSection(), 'horizontal-tb');

@@ -4,6 +4,7 @@ import type { Annotation, OpenBookOptions, ReaderHandle, ReaderSettings, SearchH
 import { collapse } from '../vendor/foliate-js/epubcfi.js';
 import { Overlayer } from '../vendor/foliate-js/overlayer.js';
 import { loadEpub } from './epub-book';
+import { centerImagePage } from './image-page';
 import { pageLayout } from './page-layout';
 import { readSelection, replayable } from './selection';
 import { installWordSelect } from './word-select';
@@ -116,6 +117,7 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
   view.addEventListener('load', ({ detail: { doc, index } }: CustomEvent<{ doc: Document; index: number }>) => {
     // Before anyone sees the document: a vertical book read horizontally needs its spacing turned (vertical-design.ts).
     if (writing === 'horizontal' && verticalBook) turnVerticalSpacing(doc);
+    centerImagePage(doc);
     opts.onDocLoad?.(doc);
     installWordSelect(doc, (e) => !!view.renderer.getContents().find((c: any) => c.doc === doc)?.overlayer?.hitTest(e)[0]);
     // Debounced so the popup waits for the drag/handles to settle instead of firing per character.
@@ -203,8 +205,9 @@ export async function openEpub(blob: Blob, container: HTMLElement, opts: OpenBoo
     },
     onSelect: selects.on,
     onRelocate: relocates.on,
-    // Read now, not cached: foliate's direction is for the section on screen, which changes with every load.
-    rtl: () => writing === 'book' && (view.renderer.direction.writingMode === 'vertical-rl' || view.renderer.direction.rtl),
+    // Read now, not cached. The book's page progression wins: a light novel's image pages are horizontal, but the
+    // keys must not flip on them. Otherwise foliate's direction for the section on screen decides.
+    rtl: () => writing === 'book' && (book.dir === 'rtl' || view.renderer.direction.writingMode === 'vertical-rl' || view.renderer.direction.rtl),
     destroy() {
       clearTimeout(timer);
       clearTimeout(resizeTimer);

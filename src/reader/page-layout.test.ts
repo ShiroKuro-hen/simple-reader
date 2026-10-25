@@ -43,7 +43,18 @@ describe('pageLayout vertical text', () => {
     const g = at(1920, 1080, { vertical: true });
     expect(g.maxColumns).toBe(1);
     expect(g.maxInline).toBe(1080);
-    expect(g.maxBlock).toBe(1920);
+  });
+
+  it('keeps the page a centred block on a wide window instead of gluing the text to the right edge', () => {
+    expect(at(1920, 1080, { vertical: true }).maxBlock).toBe(1080);
+    expect(at(1280, 800, { vertical: true }).maxBlock).toBe(800);
+    expect(at(2560, 1440, { vertical: true }).maxBlock).toBe(1440);
+  });
+
+  it('is never narrower than about 48 em, and never wider than the window', () => {
+    expect(at(844, 390, { vertical: true }).maxBlock).toBe(768);
+    expect(at(390, 844, { vertical: true }).maxBlock).toBe(390);
+    expect(at(2560, 1000, { vertical: true, fontSize: 200 }).maxBlock).toBe(1536);
   });
 });
 
