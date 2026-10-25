@@ -109,6 +109,8 @@ async function pool<T>(items: T[], size: number, fn: (item: T) => Promise<void>)
   );
 }
 const PARALLEL = 6;
+/** `books/<id>.<ext>` -> `<id>`. */
+const bookIdOf = (path: string) => path.slice('books/'.length).replace(/\.[^.]*$/, '');
 const dec = new TextDecoder();
 
 interface Side {
@@ -148,7 +150,10 @@ async function run(direction: Direction, cfg: R2Config, storage: Storage): Promi
   }
   await pool(plan.download, PARALLEL, async (p) => {
     const data = await r2.get(p);
-    if (data) await storage.write(p, data);
+    if (!data) return;
+    await storage.write(p, data);
+    // The library shows where each book came from (see cloudIds in storage/library.ts).
+    if (p.startsWith('books/')) await storage.write(`origin/${bookIdOf(p)}`, '');
   });
   return plan.download.length + writes.length;
 }

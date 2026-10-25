@@ -112,7 +112,7 @@ export function createSettings(
         const { addBook } = await import('../storage/library');
         const { books, series, failed } = await r2.importSeriesFolders(
           cfg,
-          (file, name) => addBook(file, { series: name }),
+          (file, name) => addBook(file, { series: name, fromCloud: true }),
           (done, total) => say(`Importing ${done} / ${total}...`),
         );
         if (books + failed.length === 0) say('Nothing to import.');

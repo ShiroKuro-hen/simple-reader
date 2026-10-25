@@ -49,7 +49,7 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
   }
 
   /** A book already in the library keeps its metadata, except that a different non-blank `series` is saved onto it. */
-  async function addBook(file: File, opts: { series?: string } = {}): Promise<BookMeta> {
+  async function addBook(file: File, opts: { series?: string; fromCloud?: boolean } = {}): Promise<BookMeta> {
     const format = formatOf(file.name);
     if (!format) throw new Error(`Unsupported file type: ${file.name}`);
     if (file.size === 0) throw new Error(`The file is empty: ${file.name}`);
@@ -76,6 +76,7 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
       series,
     };
     await fs.write(`books/${id}.${format}`, new Uint8Array(buf));
+    if (opts.fromCloud) await fs.write(`origin/${id}`, '');
     await writeJson(`meta/${id}.json`, meta);
     return meta;
   }
@@ -93,6 +94,15 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
     return new Blob([data as BlobPart], { type: MIME[meta.format] });
   }
 
+  /**
+   * Books that arrived from the cloud (a restore or a bucket import) rather than from a file on this device. The mark is
+   * an empty file per book under origin/, which sync does not copy: it says where this device got the book, so it can
+   * differ between devices.
+   */
+  async function cloudIds(): Promise<Set<string>> {
+    return new Set((await fs.list('origin/')).map((p) => p.slice('origin/'.length)));
+  }
+
   // text/ is this device's search cache: sync and backup copy only the folders listed in sync/r2.ts, so it stays here.
   async function removeBook(id: string): Promise<void> {
     await Promise.all([
@@ -103,6 +113,7 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
       fs.remove(`progress/${id}.json`),
       fs.remove(`annotations/${id}.json`),
       fs.remove(`text/${id}.txt`),
+      fs.remove(`origin/${id}`),
     ]);
   }
 
@@ -117,6 +128,7 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
 
   return {
     addBook,
+    cloudIds,
     listBooks,
     getBookBlob,
     getBookText,
@@ -133,7 +145,7 @@ export function createLibrary(fs: Storage, clock: () => number = Date.now) {
   };
 }
 
-export const { addBook, listBooks, getBookBlob, getBookText, removeBook, saveProgress, getProgress, getAnnotations, saveAnnotations, saveSettings, getSettings } =
+export const { addBook, cloudIds, listBooks, getBookBlob, getBookText, removeBook, saveProgress, getProgress, getAnnotations, saveAnnotations, saveSettings, getSettings } =
   createLibrary(storage);
 
 import { cleanTags } from '../library/tags';
