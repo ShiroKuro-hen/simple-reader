@@ -6,7 +6,7 @@
 import { AwsClient } from 'aws4fetch';
 import type { R2Config, Storage } from '../types';
 import { seriesFromKey } from '../library/series';
-import { planSync, type Direction, type Snapshot } from './plan';
+import { planAnnotations, planSync, srcWins, type Direction, type Snapshot } from './plan';
 
 /** The CORS rule the user must paste in the R2 dashboard (Bucket > Settings > CORS policy). */
 export function describeCors(origin?: string): string {
@@ -164,6 +164,34 @@ export async function pushToR2(cfg: R2Config, storage: Storage): Promise<{ uploa
 
 export async function pullFromR2(cfg: R2Config, storage: Storage): Promise<{ downloaded: number }> {
   return { downloaded: await run('pull', cfg, storage) };
+}
+
+/**
+ * Syncs one book's reading position and notes with the bucket, both ways: the newest position wins and the notes merge.
+ * It never touches a book file or any other book, so it is cheap enough to run whenever a book is opened or closed.
+ */
+export async function syncBookState(cfg: R2Config, storage: Storage, id: string): Promise<{ pulledProgress: boolean }> {
+  const r2 = bucket(cfg);
+  const textOf = (data: Uint8Array | null) => (data ? dec.decode(data) : undefined);
+  const position = `progress/${id}.json`;
+  const newerHere = async (remote: string) => {
+    const now = textOf(await storage.read(position));
+    return now !== undefined && !srcWins(remote, now);
+  };
+  const [here, there] = [textOf(await storage.read(position)), textOf(await r2.get(position))];
+  let pulledProgress = false;
+  // Read again at the write: the reader may have saved a newer position while the bucket was answering.
+  if (there !== undefined && (here === undefined || srcWins(there, here)) && !(await newerHere(there))) {
+    await storage.write(position, there);
+    pulledProgress = true;
+  } else if (here !== undefined && (there === undefined || srcWins(here, there))) {
+    await r2.put(position, utf8.encode(here));
+  }
+  const notes = `annotations/${id}.json`;
+  const merge = planAnnotations(notes, textOf(await storage.read(notes)), textOf(await r2.get(notes)));
+  if (merge?.remote) await r2.put(notes, utf8.encode(merge.text));
+  if (merge?.local) await storage.write(notes, merge.text);
+  return { pulledProgress };
 }
 
 // --- folders of plain files in the bucket, imported as series ---------------------------

@@ -1,5 +1,6 @@
 import type { FuriganaMode, PageLayout, R2Config, ReaderSettings, TextDirection, Theme } from '../types';
 import { storage } from '../storage/index';
+import { autoSyncOn, loadR2, saveR2, setAutoSync } from '../sync/config';
 import { h, iconButton, icon, sheet, toast } from './dom';
 import { MAX_FONT, MIN_FONT, stepFontSize } from './reading';
 
@@ -8,25 +9,6 @@ export interface App {
   settings: ReaderSettings;
   update(patch: Partial<ReaderSettings>, remember?: boolean): void;
   subscribe(cb: (s: ReaderSettings) => void): () => void;
-}
-
-const R2_KEY = 'sr.r2';
-const EMPTY_R2: R2Config = { accountId: '', bucket: '', accessKeyId: '', secretAccessKey: '' };
-
-// Credentials live only in localStorage; they are never logged or put in error text.
-function loadR2(): R2Config {
-  try {
-    return { ...EMPTY_R2, ...JSON.parse(localStorage.getItem(R2_KEY) ?? '{}') };
-  } catch {
-    return { ...EMPTY_R2 };
-  }
-}
-function saveR2(c: R2Config) {
-  try {
-    localStorage.setItem(R2_KEY, JSON.stringify(c));
-  } catch {
-    /* private mode: the user just retypes it next time */
-  }
 }
 
 const THEMES: [Theme, string][] = [['light', 'Light'], ['dark', 'Dark'], ['sepia', 'Sepia']];
@@ -87,6 +69,7 @@ export function createSettings(
   const pullBtn = h('button', { class: 'btn', type: 'button', onclick: () => run('pull') }, 'Restore');
   const importBtn = h('button', { class: 'btn', type: 'button', onclick: () => run('import') }, 'Import folders');
   const busyBtns = [pushBtn, pullBtn, importBtn];
+  const autoBox = h('input', { type: 'checkbox', checked: autoSyncOn(), onchange: (e: Event) => setAutoSync((e.target as HTMLInputElement).checked) });
 
   function say(text: string, isError = false) {
     status.textContent = text;
@@ -153,6 +136,8 @@ export function createSettings(
         h('div', { class: 'fields' },
           field('accountId', 'Account ID'), field('bucket', 'Bucket'),
           field('accessKeyId', 'Access key ID'), field('secretAccessKey', 'Secret access key', 'password')),
+        h('label', {}, autoBox, ' Sync reading position and notes automatically'),
+        h('p', { class: 'note' }, 'When you open and when you leave a book. Needs the four fields above.'),
         h('div', { class: 'row' }, pushBtn, pullBtn, importBtn),
         h('p', { class: 'note' }, 'Reads folders in your bucket, e.g. Series name/Vol 1.epub, and adds them as a series.'),
         status, hint),

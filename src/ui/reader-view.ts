@@ -1,6 +1,7 @@
 import { bookmarkOn, createAnnotation, editAnnotation, mergeAnnotationFiles, previewText, putAnnotation, removeAnnotation, upsertMark } from '../annotations';
 import type { Annotation, BookMeta, HighlightColor, Progress, ReaderHandle, ReaderSettings, TextDirection, TextSelection, TocItem, ViewSettings } from '../types';
 import { takePendingFind } from '../library/pending-find';
+import { syncBookQuietly } from '../sync/auto';
 import { FINISHED, nextVolume } from '../library/volumes';
 import { getAnnotations, getBookBlob, getProgress, listBooks, saveAnnotations, saveProgress, setWriting } from '../storage/library';
 import { createAnnotationsPanel } from './annotations-panel';
@@ -12,6 +13,9 @@ import { createSettings, type App } from './settings';
 import { debounce } from './timing';
 
 const HIDE_AFTER_MS = 3500;
+/** Opening waits this long for the bucket's position; leaving can take longer because nobody is waiting. */
+const OPEN_SYNC_MS = 1500;
+const LEAVE_SYNC_MS = 8000;
 
 export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack: () => void, onOpen: (id: string) => void): () => void {
   const ac = new AbortController();
@@ -247,9 +251,11 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
   }
 
   // --- progress ---
-  const persist = debounce((p: Progress) => void saveProgress(p).catch(() => {}), 700);
+  // Saves queue behind each other, so leaving the book can wait for the last one before it syncs.
+  const persist = debounce((p: Progress) => void (writing = writing.then(() => saveProgress(p)).catch(() => {})), 700);
+  const syncOut = () => void writing.then(() => syncBookQuietly(book.id, LEAVE_SYNC_MS));
   addEventListener('pagehide', persist.flush, { signal: ac.signal });
-  document.addEventListener('visibilitychange', () => document.hidden && persist.flush(), { signal: ac.signal });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { persist.flush(); syncOut(); } }, { signal: ac.signal });
 
   slider.addEventListener('pointerdown', () => (dragging = true));
   slider.addEventListener('input', () => {
@@ -301,6 +307,8 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
   // --- open ---
   void (async () => {
     try {
+      if (await syncBookQuietly(book.id, OPEN_SYNC_MS)) toast('Continuing where you stopped on another device.');
+      if (disposed) return;
       const [{ openBook }, blob, saved, notes, library] = await Promise.all([
         import('../reader/index'),
         getBookBlob(book.id),
@@ -360,6 +368,7 @@ export function mountReader(root: HTMLElement, book: BookMeta, app: App, onBack:
     clearTimeout(hideTimer);
     unsub();
     persist.flush();
+    syncOut();
     handle?.destroy();
     popup.dispose();
     settings.dispose();
