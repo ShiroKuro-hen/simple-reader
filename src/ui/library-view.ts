@@ -14,6 +14,8 @@ import { coverInitial, titleHue } from './cover';
 import { h, icon, iconButton, sheet, toast } from './dom';
 import type { Entry } from '../library/series';
 import { isRead, withReadMark } from '../library/volumes';
+import { isConfigured, loadR2 } from '../sync/config';
+import { storage } from '../storage/index';
 import { libIcon } from './library-icons';
 import { bookLabel } from './reading';
 import { createSettings, type App } from './settings';
@@ -39,6 +41,15 @@ const TAG_ERRORS: Record<Extract<AddResult, { ok: false }>['reason'], string> = 
   'too-many': `A book can have up to ${MAX_TAGS} categories.`,
 };
 
+const SHOW_CLOUD_KEY = 'sr.showcloud';
+function storedShowCloud(): boolean {
+  try {
+    return localStorage.getItem(SHOW_CLOUD_KEY) === 'on';
+  } catch {
+    return false;
+  }
+}
+
 function storedSort(): SortKey {
   try {
     return parseSortKey(localStorage.getItem(SORT_KEY));
@@ -54,6 +65,11 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   const progress = new Map<string, Progress>();
   /** Books that came down from the cloud; every other book was added from a file on this device. */
   let cloud = new Set<string>();
+  /** "Show cloud books" is on: books that are only in the bucket are listed too, and downloaded when opened. Kept between visits. */
+  let showCloud = storedShowCloud();
+  /** The books the bucket has and this device lacks, read when the switch is turned on (or the library opens with it on). */
+  let cloudOnly: BookMeta[] = [];
+  let loadingCloud = false;
   let loaded = false;
   let query = '';
   let selected: string[] = [];
@@ -98,9 +114,11 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   sortSel.value = sort;
   const findBtn = h('button', { class: 'btn find-toggle', type: 'button', 'aria-pressed': 'false', onclick: () => toggleFinding() },
     icon('book'), 'Search inside books');
+  const cloudBtn = h('button', { class: 'btn find-toggle', type: 'button', 'aria-pressed': String(showCloud), hidden: true, onclick: () => void toggleCloud() },
+    libIcon('cloud'), 'Show cloud books');
   const sortLabel = h('label', { class: 'sort' }, sortSel);
   const tools = h('div', { class: 'lib-tools', hidden: true },
-    h('label', { class: 'search' }, libIcon('search'), search), findBtn, sortLabel);
+    h('label', { class: 'search' }, libIcon('search'), search), findBtn, cloudBtn, sortLabel);
   const chips = h('div', { class: 'tag-chips', role: 'group', 'aria-label': 'Filter by category', hidden: true });
   const count = h('p', { class: 'lib-count', role: 'status', 'aria-live': 'polite', hidden: true });
   const results = h('div', { class: 'lib-results' });
@@ -267,6 +285,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     }
     loaded = true;
     render();
+    if (showCloud && !cloudOnly.length) void loadCloud();
   }
 
   const clearFilters = () => {
@@ -303,6 +322,42 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     } catch {
       if (id === scanId) toast("Couldn't search inside books.", 'error');
     }
+  }
+
+  /** Turns the cloud list on or off; on, it reads what the bucket has that this device lacks. */
+  async function toggleCloud() {
+    showCloud = !showCloud;
+    cloudBtn.setAttribute('aria-pressed', String(showCloud));
+    try { localStorage.setItem(SHOW_CLOUD_KEY, showCloud ? 'on' : 'off'); } catch { /* the choice just won't survive a restart */ }
+    render();
+    if (showCloud) await loadCloud();
+  }
+
+  async function loadCloud() {
+    if (loadingCloud || !isConfigured(loadR2())) return;
+    loadingCloud = true;
+    try {
+      const { listCloudBooks } = await import('../sync/r2');
+      cloudOnly = await listCloudBooks(loadR2(), new Set(books.map((b) => b.id)));
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't read the cloud.", 'error');
+    } finally {
+      loadingCloud = false;
+    }
+    render();
+  }
+
+  /** Downloads a book that is only in the bucket, then opens it. */
+  async function downloadAndOpen(b: BookMeta) {
+    toast(`Downloading ${b.title}…`);
+    try {
+      const { downloadCloudBook } = await import('../sync/r2');
+      await downloadCloudBook(loadR2(), storage, b);
+    } catch (e) {
+      return toast(e instanceof Error ? e.message : "Couldn't download that book.", 'error');
+    }
+    cloudOnly = cloudOnly.filter((c) => c.id !== b.id);
+    onOpen(b.id);
   }
 
   function toggleFinding() {
@@ -351,7 +406,11 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     const counts = tagCounts(books);
     selected = liveSelection(selected, books); // a category nobody carries any more cannot stay selected
     const lastRead = new Map([...progress].filter(([, p]) => p.fraction > 0).map(([id, p]) => [id, p.updatedAt]));
-    const view = libraryView(books, { query, tags: selected, sort }, lastRead);
+    const bucketSet = isConfigured(loadR2());
+    cloudBtn.hidden = !bucketSet;
+    const here = new Set(books.map((b) => b.id));
+    const shown = showCloud && bucketSet ? [...books, ...cloudOnly.filter((b) => !here.has(b.id))] : books;
+    const view = libraryView(shown, { query, tags: selected, sort }, lastRead);
     // The open series is dropped when it no longer has a visible volume (removed, or filtered out): back to the library.
     const series = openSeries === null ? undefined : view.entries.find((e): e is SeriesEntry => e.kind === 'series' && e.name.toLowerCase() === openSeries);
     if (!series) openSeries = null;
@@ -436,12 +495,15 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   }
 
   /** The band along the bottom of a cover: an icon and the word for where the book came from. */
-  function originStrip(fromCloud: boolean) {
-    return h('div', { class: 'card-origin', 'data-origin': fromCloud ? 'cloud' : 'local' }, libIcon(fromCloud ? 'cloud' : 'device'), fromCloud ? 'Cloud' : 'This device');
+  function originStrip(origin: 'local' | 'cloud' | 'cloud-only') {
+    const [icon, word] = origin === 'local' ? (['device', 'This device'] as const) : origin === 'cloud' ? (['cloud', 'Cloud'] as const) : (['download', 'Cloud only'] as const);
+    return h('div', { class: 'card-origin', 'data-origin': origin }, libIcon(icon), word);
   }
 
   /** A book in the grid, or (`shelf`) a lighter card on the "Continue reading" row, which has no edit buttons. */
   function card(b: BookMeta, shelf = false) {
+    const away = !books.some((x) => x.id === b.id); // only in the bucket: nothing on this device to edit yet
+    if (away) return cloudOnlyCard(b);
     const p = progress.get(b.id);
     // The shelf repeats books of the grid: its name differs so each button is still one unambiguous book.
     const label = p && p.fraction > 0 ? bookLabel(b.title, p.fraction) : `Open ${b.title}`;
@@ -449,7 +511,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     const fill = h('i', { style: `transform:scaleX(${p && p.fraction > 0 ? Math.min(1, p.fraction) : 0})` });
     const tags = cleanTags(b.tags).filter((t) => t !== FAVORITES); // the star already says it
     open.append(
-      h('div', { class: 'cover' }, coverOf(b), originStrip(cloud.has(b.id))),
+      h('div', { class: 'cover' }, coverOf(b), originStrip(cloud.has(b.id) ? 'cloud' : 'local')),
       h('p', { class: 'card-title' }, b.title),
       h('p', { class: 'card-author' }, b.author ?? ' '),
       ...(tags.length ? [h('p', { class: 'card-tagline' }, tags.map((t) => `#${t}`).join(' '))] : []),
@@ -504,6 +566,15 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     }
     await refresh();
     main.querySelector<HTMLElement>(`[data-book="${b.id}"] .card-fav`)?.focus();
+  }
+
+  /** A book that is only in the bucket: its cover and title, and one button that downloads it and opens it. */
+  function cloudOnlyCard(b: BookMeta) {
+    const open = h('button', { class: 'card-open', type: 'button', 'aria-label': `Download ${b.title}`, onclick: () => void downloadAndOpen(b) },
+      h('div', { class: 'cover' }, coverOf(b), originStrip('cloud-only')),
+      h('p', { class: 'card-title' }, b.title),
+      h('p', { class: 'card-author' }, b.author ?? ' '));
+    return h('li', { class: 'card', 'data-book': b.id }, open);
   }
 
   /** Marks a book read, or puts it back to unread. The refresh redraws the card, so focus goes back to its button. */

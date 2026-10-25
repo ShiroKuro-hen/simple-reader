@@ -4,7 +4,7 @@
 //
 // The network layer is tested against a REAL S3 server: see r2.s3.test.ts.
 import { AwsClient } from 'aws4fetch';
-import type { R2Config, Storage } from '../types';
+import type { BookFormat, BookMeta, R2Config, Storage } from '../types';
 import { seriesFromKey } from '../library/series';
 import { planAnnotations, planSync, srcWins, type Direction, type Snapshot } from './plan';
 
@@ -192,6 +192,55 @@ export async function syncBookState(cfg: R2Config, storage: Storage, id: string)
   if (merge?.remote) await r2.put(notes, utf8.encode(merge.text));
   if (merge?.local) await storage.write(notes, merge.text);
   return { pulledProgress };
+}
+
+// --- books that are in the bucket but not on this device ----------------------------
+
+const FORMATS: readonly BookFormat[] = ['epub', 'pdf', 'cbz'];
+const idOfKey = (key: string) => key.slice(key.lastIndexOf('/') + 1).replace(/.[^.]*$/, '');
+
+/** The metadata of a book as the bucket holds it, or undefined when it cannot be read as one. */
+function parseMeta(data: Uint8Array | null): BookMeta | undefined {
+  try {
+    const m = JSON.parse(dec.decode(data ?? new Uint8Array())) as Partial<BookMeta> | null;
+    const ok = !!m && typeof m.id === 'string' && typeof m.title === 'string' && FORMATS.includes(m.format as BookFormat);
+    return ok ? (m as BookMeta) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The books in the bucket that `haveIds` lacks, as metadata only (title, cover, series), so they can be shown without
+ * downloading them. A book counts once its file is in the bucket too; unreadable metadata is skipped.
+ */
+export async function listCloudBooks(cfg: R2Config, haveIds: ReadonlySet<string>): Promise<BookMeta[]> {
+  const r2 = bucket(cfg);
+  const withFile = new Set((await r2.list('books/')).map(idOfKey));
+  const ids = (await r2.list('meta/')).map(idOfKey).filter((id) => withFile.has(id) && !haveIds.has(id));
+  const found: BookMeta[] = [];
+  await pool(ids, PARALLEL, async (id) => {
+    const m = parseMeta(await r2.get(`meta/${id}.json`));
+    if (m) found.push(m);
+  });
+  return found;
+}
+
+/**
+ * Brings one book from the bucket into the library: the file, the position and the notes, then the metadata (the book
+ * shows up in the library once that is written, so a failure half way leaves nothing behind in the list).
+ */
+export async function downloadCloudBook(cfg: R2Config, storage: Storage, meta: BookMeta): Promise<void> {
+  const r2 = bucket(cfg);
+  const file = await r2.get(`books/${meta.id}.${meta.format}`);
+  if (!file) throw new Error('That book is no longer in the bucket.');
+  const extras = [`progress/${meta.id}.json`, `annotations/${meta.id}.json`, `meta/${meta.id}.json`];
+  const bodies = [] as (Uint8Array | null)[];
+  for (const path of extras) bodies.push(await r2.get(path));
+  if (!bodies[2]) throw new Error('That book is no longer in the bucket.');
+  await storage.write(`books/${meta.id}.${meta.format}`, file);
+  await storage.write(`origin/${meta.id}`, '');
+  for (const [i, path] of extras.entries()) if (bodies[i]) await storage.write(path, bodies[i]!);
 }
 
 // --- folders of plain files in the bucket, imported as series ---------------------------
