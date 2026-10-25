@@ -113,8 +113,7 @@ ${cover ? '<meta name="cover" content="cover-img"/>' : ''}
       `OEBPS/c${i}.xhtml`,
       `<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml" lang="${lang}"><head><title>${esc(c.title)}</title>${css ? '<link rel="stylesheet" type="text/css" href="style.css"/>' : ''}</head><body>
-<h1>${esc(c.title)}</h1>
-${c.bodyHtml ?? c.paragraphs.map((p) => `<p>${paraHtml(p)}</p>`).join('\n')}
+${c.title ? `<h1>${esc(c.title)}</h1>\n` : ''}${c.bodyHtml ?? c.paragraphs.map((p) => `<p>${paraHtml(p)}</p>`).join('\n')}
 </body></html>`,
     );
   if (cover) await add('OEBPS/cover.png', cover);
@@ -272,6 +271,29 @@ out(
     css: 'html, body { writing-mode: vertical-rl; }\np { margin: 0 0 0.6em; }',
     progression: 'rtl',
     chapters: [1, 2, 3].map((n) => ({ title: `第${n}章`, paragraphs: jaVerticalChapter(n) })),
+  }),
+);
+
+// ---- Vertical Japanese EPUB with a horizontal image page in the middle ---------------------------------------
+// Like a light novel: vertical text, but the cover and the colour plates are horizontal pages with one image, and the
+// whole spine still reads right to left.
+const plate = `<style>html, body { writing-mode: horizontal-tb !important; }</style>
+<p style="margin: 0"><svg style="vertical-align: top" xmlns="http://www.w3.org/2000/svg" width="300" height="400" viewBox="0 0 300 400"><rect width="300" height="400" fill="#6c8ebf"/></svg></p>`;
+out(
+  'book-ja-plates.epub',
+  await epub({
+    id: 'urn:uuid:77777777-7777-7777-7777-777777777777',
+    title: '口絵のある本',
+    author: '山田花子',
+    lang: 'ja',
+    cover: null,
+    css: 'html, body { writing-mode: vertical-rl; }\np { margin: 0 0 0.6em; }',
+    progression: 'rtl',
+    chapters: [
+      { title: '第1章', paragraphs: jaVerticalChapter(1) },
+      { title: '', bodyHtml: plate },
+      { title: '第2章', paragraphs: jaVerticalChapter(2) },
+    ],
   }),
 );
 

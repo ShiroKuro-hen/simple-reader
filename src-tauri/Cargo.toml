@@ -1,6 +1,6 @@
 [package]
 name = "simple-reader"
-version = "0.7.1"
+version = "0.7.2"
 description = "A clean, local-first EPUB and PDF reader."
 edition = "2021"
 license = "MIT"
