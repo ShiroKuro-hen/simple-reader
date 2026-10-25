@@ -314,3 +314,30 @@ describe('setWriting', () => {
     await expect(setWriting('nope', 'horizontal', fs)).rejects.toThrow(/Unknown book/);
   });
 });
+
+describe('where a book came from', () => {
+  it('a book added from a file is local; one added from the cloud is marked, on this device only', async () => {
+    const { fs, lib } = setup();
+    const local = await lib.addBook(fixtureFile('book-en.epub'));
+    const cloud = await lib.addBook(fixtureFile('book-ja.epub'), { fromCloud: true });
+    expect([...(await lib.cloudIds())]).toEqual([cloud.id]);
+    expect(local.id).not.toBe(cloud.id);
+    // sync copies meta/, progress/, annotations/, books/ and settings.json: the mark must live in none of them
+    expect(await fs.list('origin/')).toEqual([`origin/${cloud.id}`]);
+  });
+
+  it('a book already in the library keeps its origin when the same bytes come from the cloud', async () => {
+    const { lib } = setup();
+    const first = await lib.addBook(fixtureFile('book-en.epub'));
+    await lib.addBook(fixtureFile('book-en-copy.epub'), { fromCloud: true });
+    expect((await lib.cloudIds()).has(first.id)).toBe(false);
+  });
+
+  it('removing a book forgets its mark', async () => {
+    const { fs, lib } = setup();
+    const { id } = await lib.addBook(fixtureFile('book-en.epub'), { fromCloud: true });
+    await lib.removeBook(id);
+    expect(await fs.list('origin/')).toEqual([]);
+    expect((await lib.cloudIds()).size).toBe(0);
+  });
+});

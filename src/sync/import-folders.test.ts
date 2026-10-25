@@ -5,7 +5,7 @@ import { storeZip } from '../reader/fixtures/store-zip';
 import { memoryStorage } from '../storage/opfs';
 import { createLibrary } from '../storage/library';
 import type { R2Config } from '../types';
-import { importSeriesFolders, listSeriesFolders } from './r2';
+import { importSeriesFolders, listSeriesFolders, pullFromR2 } from './r2';
 
 // A REAL HTTP server (node:http on port 0) that speaks just enough of S3 path-style:
 // ListObjectsV2 with pagination, and GET of one object. Signatures are not checked.
@@ -224,5 +224,24 @@ describe('importSeriesFolders: download each book and add it under its folder', 
   it('an empty bucket imports nothing', async () => {
     const { add } = library();
     expect(await withS3({}, {}, (cfg) => importSeriesFolders(cfg, add))).toEqual({ books: 0, series: 0, failed: [] });
+  });
+});
+
+describe('pullFromR2: the books that come down are marked as cloud', () => {
+  const metaOf = (id: string) => bytes(JSON.stringify({ id, title: id, format: 'cbz', size: 1, addedAt: 1 }));
+
+  it('marks the books it downloads and leaves the ones already on this device alone', async () => {
+    const objects = {
+      'books/aaa.cbz': cbz('a'),
+      'meta/aaa.json': metaOf('aaa'),
+      'books/bbb.cbz': cbz('b'),
+      'meta/bbb.json': metaOf('bbb'),
+    };
+    const fs = memoryStorage();
+    await fs.write('books/bbb.cbz', cbz('b'));
+    await fs.write('meta/bbb.json', metaOf('bbb'));
+    await withS3(objects, {}, (cfg) => pullFromR2(cfg, fs));
+    expect(await fs.list('origin/')).toEqual(['origin/aaa']);
+    expect([...(await createLibrary(fs).cloudIds())]).toEqual(['aaa']);
   });
 });

@@ -9,7 +9,7 @@ import { addTag, cleanTags, FAVORITES, isFavorite, liveSelection, MAX_TAG_LENGTH
 import { countLabel, libraryView } from '../library/view';
 import type { InstallPrompt } from '../pwa/install';
 import { excerptParts } from '../reader/search-results';
-import { addBook, getBookText, getProgress, listBooks, removeBook, setTags } from '../storage/library';
+import { addBook, cloudIds, getBookText, getProgress, listBooks, removeBook, setTags } from '../storage/library';
 import { coverInitial, titleHue } from './cover';
 import { h, icon, iconButton, sheet, toast } from './dom';
 import type { Entry } from '../library/series';
@@ -51,6 +51,8 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   const settings = createSettings(app, { onRestored: () => void refresh() });
   let books: BookMeta[] = [];
   const progress = new Map<string, Progress>();
+  /** Books that came down from the cloud; every other book was added from a file on this device. */
+  let cloud = new Set<string>();
   let loaded = false;
   let query = '';
   let selected: string[] = [];
@@ -254,6 +256,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
   async function refresh() {
     try {
       books = await listBooks();
+      cloud = await cloudIds().catch(() => new Set<string>());
       const found = await Promise.all(books.map((b) => getProgress(b.id).catch(() => null)));
       progress.clear();
       found.forEach((p, i) => p && progress.set(books[i]!.id, p));
@@ -431,6 +434,11 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     return h('li', { class: 'card series', 'data-series': key }, open);
   }
 
+  /** The band along the bottom of a cover: an icon and the word for where the book came from. */
+  function originStrip(fromCloud: boolean) {
+    return h('div', { class: 'card-origin', 'data-origin': fromCloud ? 'cloud' : 'local' }, libIcon(fromCloud ? 'cloud' : 'device'), fromCloud ? 'Cloud' : 'This device');
+  }
+
   /** A book in the grid, or (`shelf`) a lighter card on the "Continue reading" row, which has no edit buttons. */
   function card(b: BookMeta, shelf = false) {
     const p = progress.get(b.id);
@@ -440,7 +448,7 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     const fill = h('i', { style: `transform:scaleX(${p && p.fraction > 0 ? Math.min(1, p.fraction) : 0})` });
     const tags = cleanTags(b.tags).filter((t) => t !== FAVORITES); // the star already says it
     open.append(
-      h('div', { class: 'cover' }, coverOf(b)),
+      h('div', { class: 'cover' }, coverOf(b), originStrip(cloud.has(b.id))),
       h('p', { class: 'card-title' }, b.title),
       h('p', { class: 'card-author' }, b.author ?? ' '),
       ...(tags.length ? [h('p', { class: 'card-tagline' }, tags.map((t) => `#${t}`).join(' '))] : []),
