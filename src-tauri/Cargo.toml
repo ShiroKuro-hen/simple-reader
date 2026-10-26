@@ -16,6 +16,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 # Opens the release page in the system browser (the webview ignores links that ask for a new window).
 tauri-plugin-opener = "2"
+# The generated app context reads the plugins section of the config (the updater has one) with it.
+serde_json = "1"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"
