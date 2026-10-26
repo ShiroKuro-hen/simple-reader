@@ -27,6 +27,8 @@ describe('listCloudBooks: the books in the bucket this device does not have', ()
       'meta/bad.json': enc.encode('not json'),
       ...uploaded(meta('odd')),
       'meta/odd.json': json({ id: 'odd', title: 5, format: 'epub' }),
+      ...uploaded(meta('evil')),
+      'meta/evil.json': json({ ...meta('evil'), id: 'a/../b' }), // an id that would write outside its own paths
     };
     const got = await withS3(objects, {}, (cfg) => listCloudBooks(cfg, new Set()));
     expect(got.map((b) => b.id)).toEqual(['ok']);

@@ -1,6 +1,6 @@
 # Desktop (Windows) and Android builds
 
-simple-reader ships as a [Tauri v2](https://v2.tauri.app) shell around the same Vite build that is deployed to GitHub Pages. The shell lives in `src-tauri/` and has no custom Rust code: it only opens the WebView on `dist/`.
+simple-reader ships as a [Tauri v2](https://v2.tauri.app) shell around the same Vite build that is deployed to GitHub Pages. The shell lives in `src-tauri/`. Its small Rust side (`src/lib.rs`, `src/book_files.rs`) only hands the page the books the system asked to open and runs the signed desktop updater; everything else is the web app.
 
 - The Vite `base` is `./`, so the same `dist/` works on GitHub Pages and inside Tauri (`tauri.localhost`).
 - Storage is OPFS (`src/storage/opfs.ts`), which WebView2 (Windows) and Android System WebView both provide, so no native file plugin is needed. Books and annotations live in the WebView's profile (per app, per user).
@@ -8,7 +8,7 @@ simple-reader ships as a [Tauri v2](https://v2.tauri.app) shell around the same 
 
 ## CI (recommended)
 
-`.github/workflows/tauri.yml` runs on `workflow_dispatch` and on pushes to the `tauri` branch.
+`.github/workflows/tauri.yml` runs on `workflow_dispatch`, on pushes to the `tauri` branch and on `v*` tags. A tag also publishes the Windows installer, the APK and `latest.json` (what the desktop updater reads) on a GitHub Release.
 
 | Job | Runner | Command | Artifact |
 |---|---|---|---|
@@ -44,7 +44,7 @@ Output: `src-tauri/gen/android/app/build/outputs/apk/`.
 2. Open it from the file manager and allow "Install unknown apps" for that file manager when asked.
 3. A phone with an arm64 CPU is required for the CI build (nearly every phone since 2017). For emulators (x86_64) build locally with `--target x86_64`.
 
-The CI build is a debug build (R8 would strip the JavaScript bridge of the "Open with" patch) that is re-signed with our own key, so each release can update the previous one in place. Builds without the key (a fork, a run without secrets) stay debug-signed and need an uninstall before the next release, which deletes the library.
+The CI build uses the debug build type (R8 would strip the JavaScript bridge of the "Open with" patch) with debugging switched off by `apply.mjs`, and is re-signed with our own key, so each release can update the previous one in place. Builds without the key (a fork, a run without secrets) stay debug-signed and need an uninstall before the next release, which deletes the library.
 
 ## The signing key
 
@@ -73,8 +73,8 @@ Tauri already serves assets from the app bundle, and a service worker would cach
 ## Known limits (v1)
 
 - No `Cargo.lock` is committed yet; the first local `cargo` run creates one, commit it for reproducible builds.
-- Only the arm64 APK is built in CI. File associations (`.epub`/`.pdf`) and a folder-watching feature are not wired up.
-- App-level checks were run on CI only (builds); the APK has not been run on a device or emulator.
+- Only the arm64 APK is built in CI. There is no folder watching.
+- The Rust tests and the builds run on CI; the installed apps have had little testing on real devices.
 
 ## The icon
 

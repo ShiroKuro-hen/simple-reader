@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { storeRar5 } from './fixtures/store-rar';
-import { storeZip } from './fixtures/store-zip';
+import { storeZip } from '../storage/store-zip';
 import { openComicArchive, sniffArchive } from './comic-archive';
 import { sortPageNames } from './manga-nav';
 

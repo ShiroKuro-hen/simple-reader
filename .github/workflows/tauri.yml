@@ -3,7 +3,7 @@ name: Tauri (Windows + Android)
 on:
   workflow_dispatch:
   push:
-    branches: [tauri, tauri-open-with]
+    branches: [tauri]
     tags: ['v*']
 
 permissions:
@@ -65,7 +65,7 @@ jobs:
       - run: npx tauri android init --ci
       # "Open with" / "Share to": adds intent filters, the MainActivity hooks and Incoming.kt. Fails if the template changed.
       - run: node src-tauri/android-patches/apply.mjs
-      # A debug build (R8 would strip the JavaScript bridge of the "Open with" patch), signed below with our own key.
+      # A debug build (R8 would strip the JavaScript bridge of the "Open with" patch), made not debuggable by the patch, signed below with our own key.
       - run: npx tauri android build --apk --debug --target aarch64
       - name: The APK must declare the Open with / Share filters
         run: |
@@ -74,6 +74,7 @@ jobs:
           for action in android.intent.action.VIEW android.intent.action.SEND android.intent.action.SEND_MULTIPLE; do
             echo "$manifest" | grep -q "$action" || { echo "missing $action in the built manifest"; exit 1; }
           done
+          echo "$manifest" | grep -q 'debuggable.*=true' && { echo "the APK is debuggable"; exit 1; }
           unzip -p "$apk" 'classes*.dex' | grep -aq SRIntent || { echo "Incoming.kt is not in the dex"; exit 1; }
       # Android only updates an app when the new APK has the same signing key. The debug key changes with every CI
       # runner, so without our own key each release would need an uninstall first, which deletes the library.

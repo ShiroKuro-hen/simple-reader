@@ -203,7 +203,7 @@ const idOfKey = (key: string) => key.slice(key.lastIndexOf('/') + 1).replace(/.[
 function parseMeta(data: Uint8Array | null): BookMeta | undefined {
   try {
     const m = JSON.parse(dec.decode(data ?? new Uint8Array())) as Partial<BookMeta> | null;
-    const ok = !!m && typeof m.id === 'string' && typeof m.title === 'string' && FORMATS.includes(m.format as BookFormat);
+    const ok = !!m && /^[\w-]+$/.test(String(m.id)) && typeof m.title === 'string' && FORMATS.includes(m.format as BookFormat);
     return ok ? (m as BookMeta) : undefined;
   } catch {
     return undefined;

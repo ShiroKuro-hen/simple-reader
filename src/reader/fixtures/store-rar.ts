@@ -1,7 +1,7 @@
 // A store-only (uncompressed) RAR 5 archive built in memory, so tests can make real .cbr archives.
 // No rar tool exists on the dev machine. The layout follows the RAR 5 format notes: every block is
 // CRC32, vint header size, vint type, vint flags, then type fields; file data follows its header.
-import { crc32 } from './store-zip';
+import { crc32 } from '../../storage/store-zip';
 
 const SIGNATURE = [0x52, 0x61, 0x72, 0x21, 0x1a, 0x07, 0x01, 0x00];
 const BLOCK_MAIN = 1;

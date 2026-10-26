@@ -51,7 +51,7 @@ async (page, ctx = {}) => {
   await page.goto(BASE);
   await page.locator('.lib').waitFor();
   const built = await page.evaluate(async () => {
-    const { storeZip } = await import('/src/reader/fixtures/store-zip.ts');
+    const { storeZip } = await import('/src/storage/store-zip.ts');
     const pages = async (count, w, h) => {
       const files = {};
       for (let n = 1; n <= count; n++) {

@@ -1,4 +1,4 @@
-// Adds "Open with" / "Share" to the Android project that `tauri android init --ci` generates (gen/ is not committed).
+// Adds "Open with" / "Share" (and turns debuggable off) in the Android project that `tauri android init --ci` generates (gen/ is not committed).
 // Usage: node src-tauri/android-patches/apply.mjs [path/to/gen/android]
 // Every step asserts what it expects to find and exits non-zero otherwise, so a Tauri template change fails CI loudly.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -85,4 +85,11 @@ const filters = String.raw`<!-- simple-reader: Open with / Share -->
         </activity>`;
 xml = swap(xml, '</activity>', filters, '</activity>');
 writeFileSync(manifestPath, xml);
-console.log(`android-patches: patched ${activityPath} and ${manifestPath}`);
+// 3. The debug build stays (R8 would strip the bridge), but the APK we publish must not be debuggable: anyone could attach to
+// its WebView and read the library and the bucket keys. Tauri's template sets both flags to true in the debug build type.
+const gradlePath = join(android, 'app/build.gradle.kts');
+let gradle = readFileSync(gradlePath, 'utf8');
+gradle = swap(gradle, 'isDebuggable = true', 'isDebuggable = false', 'isDebuggable = true');
+gradle = swap(gradle, 'isJniDebuggable = true', 'isJniDebuggable = false', 'isJniDebuggable = true');
+writeFileSync(gradlePath, gradle);
+console.log(`android-patches: patched ${activityPath}, ${manifestPath} and ${gradlePath}`);

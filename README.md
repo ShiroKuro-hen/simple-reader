@@ -38,10 +38,10 @@ Most readers either do a lot and get in the way, or do little and send your libr
 
 | Platform | Status |
 |---|---|
-| Web app | Available (v0.1) |
+| Web app | Available |
 | Installable PWA / offline | Available |
-| Windows installer (Tauri v2) | Built by CI, unsigned, not yet tested as an installed app |
-| Android APK (Tauri v2) | Built by CI (debug, arm64), not yet tested on a device |
+| Windows installer (Tauri v2) | Built and released by CI, self-updating; no Authenticode signature, not yet tested on many machines |
+| Android APK (Tauri v2) | Built and released by CI (debug build, arm64, signed with the project key), not yet tested on many devices |
 | macOS, Linux, iOS | Not planned yet |
 
 ## Quick start
@@ -101,7 +101,7 @@ Japanese text is analysed in the browser with [kuroshiro](https://github.com/hex
 
 ## Roadmap
 
-Taken from [PLAN.md](PLAN.md) (written in Spanish). Checked means it exists today.
+Checked means it exists today.
 
 - [x] Web app skeleton (Vite + TypeScript, single `Storage` interface)
 - [x] Open EPUB and PDF, paginated reading, themes, font size, remember position
@@ -118,7 +118,9 @@ Taken from [PLAN.md](PLAN.md) (written in Spanish). Checked means it exists toda
 - [x] Library: add a whole folder from the device (Add folder): the folder name becomes the series, and you pick EPUB, PDF and/or CBZ
 - [x] PWA with offline support
 - [x] Windows: double-click or "Open with" imports the book (EPUB, PDF, CBZ, CBR)
-- [ ] Android: sign releases with the fixed key (see docs/DESKTOP-AND-ANDROID.md), test on a real phone
+- [x] Android releases are signed with a fixed key, so each one updates the previous in place (see docs/DESKTOP-AND-ANDROID.md)
+- [x] Windows app updates itself from the signed installer of the newest release
+- [ ] Test the Windows installer and the Android APK on real devices
 - [ ] Optional: custom CSS and remappable keys, user dictionary
 
 Out of scope on purpose: local API, CLI, rules, plugins, TTS, OCR, OPDS, extra sync backends.

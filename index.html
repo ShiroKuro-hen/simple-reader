@@ -9,17 +9,9 @@
     <link rel="icon" href="./icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
-    <script>
-      // Set the theme before first paint so there is no light flash in dark mode.
-      (function () {
-        var t = null;
-        try { t = localStorage.getItem('sr.theme'); } catch (e) {}
-        if (t !== 'light' && t !== 'dark' && t !== 'sepia') {
-          t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        }
-        document.documentElement.dataset.theme = t;
-      })();
-    </script>
+    <!-- Book scripts run in the app's origin (foliate's iframes keep allow-same-origin), so only our own scripts may run. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline' blob:; img-src 'self' blob: data:; font-src 'self' blob: data:; media-src 'self' blob:; worker-src 'self' blob:; frame-src 'self' blob:; object-src 'none'; base-uri 'none'; connect-src 'self' https://translate.googleapis.com https://api.mymemory.translated.net https://es.wiktionary.org https://api.github.com https://*.r2.cloudflarestorage.com http://localhost:* http://127.0.0.1:* ws://localhost:* ipc: http://ipc.localhost" />
+    <script src="./theme-init.js"></script>
   </head>
   <body>
     <div id="app"></div>
