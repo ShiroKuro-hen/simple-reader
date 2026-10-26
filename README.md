@@ -25,7 +25,7 @@ Most readers either do a lot and get in the way, or do little and send your libr
 ## Features
 
 - **EPUB, PDF and CBZ/CBR comics** in one reader (EPUB rendered with foliate-js, PDF with PDF.js, comics as decoded page images; the ZIP or RAR container is detected from the file's bytes, and the RAR decoder loads only when a RAR is opened). Comics read right to left by default, in one or two pages, with zoom.
-- **Update notice** in the Windows and Android apps when a newer release exists on GitHub (the web app updates itself).
+- **Updates:** the web app updates itself. The Windows app checks the newest GitHub release on start and, with one tap on "Update and restart", downloads its signed installer, installs it and reopens (the installer is signed with a key only this project has; the app refuses anything else). Android cannot install an app by itself: the notice opens the APK download and Android asks you to confirm the install (the APK is signed with the same key every time, so it updates in place).
 - **Clean paginated reading** with light, dark and sepia themes, adjustable font size, and a choice of one page or two pages side by side on wide windows.
 - **Select any word to look it up:** definition and Spanish translation in a popup.
 - **Japanese support:** hiragana reading and romaji on select, plus a furigana-over-kanji mode.
