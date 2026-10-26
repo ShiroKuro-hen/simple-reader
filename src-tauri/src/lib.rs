@@ -38,6 +38,7 @@ pub fn run() {
         }));
     }
     builder
+        .plugin(tauri_plugin_opener::init())
         .manage(opened)
         .invoke_handler(tauri::generate_handler![take_opened_books, read_opened_book])
         .run(tauri::generate_context!())

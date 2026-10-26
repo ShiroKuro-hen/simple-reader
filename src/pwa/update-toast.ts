@@ -1,3 +1,4 @@
+import { openExternal } from '../native/open-url';
 import { h } from '../ui/dom';
 
 /** A toast that stays until the user chooses: "Update available - Reload". `apply` activates the waiting version (the page then reloads). */
@@ -15,7 +16,7 @@ export function showReleaseToast(version: string, url: string): void {
   if (document.querySelector('.release-toast')) return;
   const toast = h('div', { class: 'release-toast', role: 'status' },
     h('span', {}, `Version ${version} is available`),
-    h('a', { class: 'btn primary', href: url, target: '_blank', rel: 'noopener noreferrer' }, 'Download'),
+    h('button', { class: 'btn primary', type: 'button', onclick: () => openExternal(url) }, 'Download'),
     h('button', { class: 'btn', type: 'button', onclick: () => toast.remove() }, 'Later'));
   document.body.append(toast);
 }
