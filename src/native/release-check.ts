@@ -6,6 +6,7 @@ export interface Release {
   tag_name: string;
   html_url: string;
   draft?: boolean;
+  assets?: { name?: string; browser_download_url?: string }[];
 }
 
 export type Version = [number, number, number];
@@ -24,18 +25,31 @@ export function isNewer(current: string, latest: string): boolean {
   return false;
 }
 
-export function newestRelease(releases: Release[], current: string): { version: string; url: string } | null {
+export interface NewRelease {
+  version: string;
+  /** The release page. */
+  url: string;
+  /** The Android APK attached to it, when there is one. */
+  apk?: string;
+}
+
+const apkOf = (r: Release): { apk?: string } => {
+  const apk = r.assets?.find((a) => a.name?.endsWith('-android-debug.apk'))?.browser_download_url;
+  return apk ? { apk } : {};
+};
+
+export function newestRelease(releases: Release[], current: string): NewRelease | null {
   if (!Array.isArray(releases)) return null;
-  let best: { version: string; url: string } | null = null;
+  let best: NewRelease | null = null;
   for (const r of releases) {
     if (r.draft || !parseVersion(r.tag_name)) continue;
-    if (!best || isNewer(best.version, r.tag_name)) best = { version: r.tag_name.replace(/^v/, ''), url: r.html_url };
+    if (!best || isNewer(best.version, r.tag_name)) best = { version: r.tag_name.replace(/^v/, ''), url: r.html_url, ...apkOf(r) };
   }
   return best && isNewer(current, best.version) ? best : null;
 }
 
 /** Never throws: an update check must not bother the user or break startup. Offline, rate limited or garbled answers all mean "no news". */
-export async function checkForUpdate(current: string, endpoint = DEFAULT_ENDPOINT): Promise<{ version: string; url: string } | null> {
+export async function checkForUpdate(current: string, endpoint = DEFAULT_ENDPOINT): Promise<NewRelease | null> {
   try {
     const res = await fetch(endpoint, { headers: { accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;

@@ -1,6 +1,6 @@
 [package]
 name = "simple-reader"
-version = "0.8.1"
+version = "0.9.0"
 description = "A clean, local-first EPUB and PDF reader."
 edition = "2021"
 license = "MIT"
@@ -19,3 +19,5 @@ tauri-plugin-opener = "2"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"
+# Updates the desktop app from the signed installer attached to the newest GitHub release.
+tauri-plugin-updater = "2"

@@ -37,6 +37,14 @@ describe('newestRelease', () => {
   it('counts pre-releases, which this project publishes', () => {
     expect(newestRelease([rel('v0.3.0', { prerelease: true })], '0.2.0')?.version).toBe('0.3.0');
   });
+  it('hands over the Android APK of the release when it has one, so the phone can download it straight away', () => {
+    const assets = [
+      { name: 'latest.json', browser_download_url: 'https://example.test/latest.json' },
+      { name: 'simple-reader-v0.3.0-android-debug.apk', browser_download_url: 'https://example.test/v0.3.0.apk' },
+    ];
+    expect(newestRelease([rel('v0.3.0', { assets })], '0.2.0')).toEqual({ version: '0.3.0', url: 'https://example.test/v0.3.0', apk: 'https://example.test/v0.3.0.apk' });
+  });
+
   it('ignores drafts and tags that are not three numeric parts', () => {
     expect(newestRelease([rel('v9.0.0', { draft: true }), rel('v8'), rel('latest'), rel('v0.2.1')], '0.2.0')?.version).toBe('0.2.1');
   });

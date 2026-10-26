@@ -3,7 +3,7 @@ import { getSettings, listBooks, saveSettings } from './storage/library';
 import { trackInstallPrompt } from './pwa/install';
 import { registerServiceWorker } from './pwa/register';
 import { checkForUpdate } from './native/release-check';
-import { showReleaseToast, showUpdateToast } from './pwa/update-toast';
+import { openRelease, showReleaseToast, showUpdateToast, type ReleaseAction } from './pwa/update-toast';
 import type { ReaderSettings, Theme } from './types';
 import { toast } from './ui/dom';
 import { mountLibrary } from './ui/library-view';
@@ -17,9 +17,16 @@ const dark = matchMedia('(prefers-color-scheme: dark)');
 // Listen before anything async: the browser fires beforeinstallprompt only once, possibly before the library is drawn.
 const install = trackInstallPrompt();
 registerServiceWorker(showUpdateToast);
-// The native app has no service worker, so it asks GitHub for newer releases instead. Never blocks startup.
+// The native app has no service worker. The desktop app updates itself from the signed installer of the newest release;
+// Android only learns that there is one (Android installs an APK itself, after the user agrees). Never blocks startup.
 if ('__TAURI_INTERNALS__' in window) {
-  void checkForUpdate(__APP_VERSION__).then((release) => release && showReleaseToast(release.version, release.url));
+  const native = (window as any).__TAURI_INTERNALS__ as { invoke(command: string): Promise<unknown> };
+  if (window.SRIntent) {
+    void checkForUpdate(__APP_VERSION__).then((release) => release && showReleaseToast(release.version, openRelease(release.apk ?? release.url)));
+  } else {
+    const action: ReleaseAction = { label: 'Update and restart', busy: 'Updating… the app restarts when it is done.', run: () => native.invoke('install_update') as Promise<void> };
+    void (native.invoke('check_update') as Promise<string | null>).then((version) => version && showReleaseToast(version, action), () => {});
+  }
 }
 
 const storedTheme = (): string | null => {
