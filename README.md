@@ -4,59 +4,101 @@
 
 # simple-reader
 
-**A clean, local-first EPUB and PDF reader. Select a word, get the definition, the Spanish translation and, for Japanese, the reading.**
+**A local-first reader for EPUB, PDF and comics, with instant word lookup for language learners.**
 
 [![CI](https://github.com/ShiroKuro-hen/simple-reader/actions/workflows/ci.yml/badge.svg)](https://github.com/ShiroKuro-hen/simple-reader/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Built with TypeScript](https://img.shields.io/badge/built%20with-TypeScript-3178c6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/built%20with-TypeScript-3178c6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/bundled%20with-Vite-646cff.svg?logo=vite&logoColor=white)](https://vitejs.dev/)
-[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
 
-**[Try it online](https://shirokuro-hen.github.io/simple-reader/)** · your books never leave your device
+[Live demo](https://shirokuro-hen.github.io/simple-reader/) · [Releases](https://github.com/ShiroKuro-hen/simple-reader/releases) · [Report an issue](https://github.com/ShiroKuro-hen/simple-reader/issues)
 
 <img src="docs/screenshot.png" alt="simple-reader showing an EPUB with a word lookup popup" width="800">
 
 </div>
 
-## Why simple-reader
+## Overview
 
-Most readers either do a lot and get in the way, or do little and send your library to someone else's server. simple-reader aims at the middle: a quiet reading view, instant word lookup for language learners, and your books kept as plain files on your own device. No account, no database, no tracking.
+simple-reader keeps your books as plain files on your own device. There is no account, no server and no tracking. Select a word while reading to get its definition and a Spanish translation, and for Japanese its reading, romaji and optional furigana.
+
+It runs in the browser as an installable, offline-capable PWA, and as a Windows and Android app built from the same code with Tauri v2.
+
+## Contents
+
+- [Features](#features)
+- [Platforms](#platforms)
+- [Getting started](#getting-started)
+- [Usage](#usage)
+- [Optional cloud sync (Cloudflare R2)](#optional-cloud-sync-cloudflare-r2)
+- [Word lookup](#word-lookup)
+- [Architecture](#architecture)
+- [Security and privacy](#security-and-privacy)
+- [Development](#development)
+- [Contributing](#contributing)
+- [Acknowledgements](#acknowledgements)
+- [License](#license)
 
 ## Features
 
-- **EPUB, PDF and CBZ/CBR comics** in one reader (EPUB rendered with foliate-js, PDF with PDF.js, comics as decoded page images; the ZIP or RAR container is detected from the file's bytes, and the RAR decoder loads only when a RAR is opened). Comics read right to left by default, in one or two pages, with zoom.
-- **Updates:** the web app updates itself. The Windows app checks the newest GitHub release on start and, with one tap on "Update and restart", downloads its signed installer, installs it and reopens (the installer is signed with a key only this project has; the app refuses anything else). Android cannot install an app by itself: the notice opens the APK download and Android asks you to confirm the install (the APK is signed with the same key every time, so it updates in place).
-- **Clean paginated reading** with light, dark and sepia themes, adjustable font size, and a choice of one page or two pages side by side on wide windows.
-- **Select any word to look it up:** definition and Spanish translation in a popup.
-- **Japanese support:** hiragana reading and romaji on select, plus a furigana-over-kanji mode.
-- **Local-first:** books are files on your device (browser OPFS). No account, no database.
-- **Highlights, notes and bookmarks:** four highlight colours and notes on EPUB and PDF text, page bookmarks, a side panel to browse and jump, and export to Markdown (with a copy button) for your notes app.
-- **Library:** search by title, author, series or category (accent-insensitive, Japanese-safe), your own categories (they vanish when empty), favorites, a "Continue reading" shelf, sorting, and series shown as one card with their volumes inside (in volume-number order, each markable as read, with an offer of the next volume at the end of one). Each cover has a band saying where the book came from: this device or the cloud. "Search inside books" looks through the text of every EPUB and PDF (the text is cached on your device).
-- **Optional backup/sync** to your own free Cloudflare R2 bucket. It never deletes anything; the newest reading progress wins and highlights are merged one by one, so two devices never lose each other's notes. With a bucket set up, opening and leaving a book syncs its position and notes by themselves (a switch in Settings turns that off), and "Show cloud books" lists the books that are only in the bucket and downloads one when you open it.
-- **Installable and offline:** a PWA that opens without a connection once visited. Japanese reading works offline after the first Japanese lookup.
-- **Runs as a web app** in the browser, with Windows and Android builds produced by CI (see below).
+**Reading**
+- EPUB (rendered with foliate-js), PDF (PDF.js) and CBZ/CBR comics. The container of a comic is detected from the file's bytes, and the RAR decoder loads only when a RAR is opened.
+- Paginated reading with light, dark and sepia themes, adjustable font size, and one or two pages on wide windows.
+- Vertical and right-to-left EPUBs keep their direction. Page-turn keys follow the book; Settings > Text direction can force horizontal.
+- Comics read right to left by default, in one or two pages, with zoom and a vertical (webtoon) mode.
+- In-book search with `Ctrl+F` for EPUB and PDF.
+
+**Language learning**
+- Select a word or phrase to see its definition and Spanish translation.
+- Japanese: whole-word selection through a morphological analyser, hiragana reading, romaji, and a furigana-over-kanji mode. Definitions come from a bundled, trimmed JMdict.
+
+**Library**
+- Search by title, author, series or category (accent-insensitive and safe for Japanese), plus search inside the text of every book.
+- Categories, favorites, a "Continue reading" shelf, sorting, and series shown as one card with their volumes in order.
+- Import single files, whole folders (the folder becomes a series) or folders of images (packed into CBZ volumes).
+
+**Notes**
+- Four highlight colours, notes and bookmarks on EPUB and PDF, a side panel to browse them, and Markdown export.
+
+**Sync and offline**
+- Optional backup and sync to your own Cloudflare R2 bucket. Nothing is ever deleted; the newest reading position wins and highlights merge one by one.
+- With a bucket configured, opening and leaving a book syncs its position and notes automatically.
+- Books that exist only in the bucket can be listed and downloaded on demand.
+- Works offline once installed.
+
+## Platforms
 
 | Platform | Status |
 |---|---|
-| Web app | Available |
-| Installable PWA / offline | Available |
-| Windows installer (Tauri v2) | Built and released by CI, self-updating; no Authenticode signature, not yet tested on many machines |
-| Android APK (Tauri v2) | Built and released by CI (debug build, arm64, signed with the project key), not yet tested on many devices |
-| macOS, Linux, iOS | Not planned yet |
+| Web app / PWA | Available, installable and offline-capable |
+| Windows (Tauri v2) | Released through GitHub Releases; updates itself from a signed installer |
+| Android (Tauri v2) | Released through GitHub Releases as an APK signed with the project key |
+| macOS, Linux, iOS | Not planned |
 
-## Quick start
+The native apps register `.epub`, `.pdf`, `.cbz` and `.cbr` so books can be opened from the file manager ("Open with" and, on Android, "Share"). The Windows installer is not Authenticode-signed, so SmartScreen may warn. Android installs updates through the APK download shown in the app.
+
+## Getting started
+
+Requirements: Node.js 22 or newer.
 
 ```bash
 npm install
-npm run dev      # start the dev server
-npm run build    # typecheck and build to dist/
+npm run dev        # development server
+npm run build      # typecheck and production build into dist/
+npm run preview    # serve the production build
 ```
 
-Run the unit tests with `npm test` and the real-browser suites (Chromium via Playwright) with `npm run e2e`. See [docs/DESKTOP-AND-ANDROID.md](docs/DESKTOP-AND-ANDROID.md) for the native builds.
+Native builds require [Rust](https://rustup.rs). For Windows, also the MSVC build tools and the WebView2 runtime:
+
+```bash
+npm run tauri dev
+npm run tauri build
+```
+
+Android additionally needs JDK 17, the Android SDK (platform 36, build-tools 35) and NDK 27. The release builds are produced by `.github/workflows/tauri.yml`, which also applies the "Open with" and "Share" patch (`src-tauri/android-patches/`) and signs the APK.
 
 ## Usage
 
-Open an EPUB or PDF from the library screen (file picker or drag and drop). Select a word or phrase to open the lookup popup. Theme, font size, page layout and furigana mode live in the settings panel. EPUB lines keep a comfortable length (about 40 em, growing with the font size): wide windows show more columns instead of longer lines, and the text keeps clear of the toolbars. Your last position in each book is remembered. Select text to highlight it in a colour or add a note; the bookmark button and the annotations panel are in the reader's top bar. Search the whole book from the magnifier in the top bar or with `Ctrl+F` (EPUB and PDF; PDF results are grouped by page).
+Open a book from the library screen with the file picker or by dragging a file in. Theme, font size, page layout and furigana mode are in Settings. The bookmark button and the annotations panel are in the reader's top bar, and the magnifier (or `Ctrl+F`) searches the whole book.
 
 | Action | Keys |
 |---|---|
@@ -65,17 +107,15 @@ Open an EPUB or PDF from the library screen (file picker or drag and drop). Sele
 | Close the popup / show or hide the toolbars | `Esc` |
 | Show the toolbars | `Tab` (on touch: tap the middle of the page) |
 
-Vertical EPUBs (such as Japanese novels) keep their direction by default: the page-turn keys and the edge clicks follow it, so the left edge goes forward. Settings > Text direction can force horizontal, left-to-right reading. The choice is per book and syncs with it.
+In vertical books the keys and edges follow the book, so the left edge goes forward. In Japanese text a click selects the whole word and furigana readings are never part of a selection; dragging still selects any phrase.
 
-In Japanese text a click or tap selects the whole word, found with the tokenizer, and furigana readings are never part of a selection; dragging still selects any phrase.
+## Optional cloud sync (Cloudflare R2)
 
-## Cloudflare R2 setup (optional sync)
+Sync copies books, metadata, reading progress, notes and settings to a bucket you own. R2's free tier is enough for a personal library.
 
-Backup copies your library (books, metadata, reading progress, settings) to a bucket you own. R2 has a free tier that is plenty for a personal library.
-
-1. In the Cloudflare dashboard, go to **R2** and create a bucket (for example `simple-reader`). Note your **Account ID**, shown on the R2 overview page.
-2. Create an **API token** (R2 > Manage API tokens) with **Object Read & Write** permission for that bucket. Copy the Access Key ID and Secret Access Key.
-3. Add a **CORS rule** to the bucket (Settings > CORS policy); without it the browser blocks the requests. Paste this, replacing the origin with the address where you run the app (`https://shirokuro-hen.github.io` for the hosted version) (the rule is generated by `describeCors()` in `src/sync/r2.ts`, and network errors repeat it):
+1. In the Cloudflare dashboard open **R2**, create a bucket (for example `simple-reader`) and note your **Account ID**.
+2. Create an **API token** (R2 > Manage API tokens) with **Object Read & Write** on that bucket. Keep the Access Key ID and Secret Access Key.
+3. Add a **CORS rule** to the bucket (Settings > CORS policy), replacing the origin with the address where you run the app (`https://shirokuro-hen.github.io` for the hosted version). The rule is generated by `describeCors()` in `src/sync/r2.ts`, and network errors in the app repeat it.
 
    ```json
    [
@@ -88,61 +128,60 @@ Backup copies your library (books, metadata, reading progress, settings) to a bu
      }
    ]
    ```
-4. In the app, open **Settings** and paste the account ID, bucket name, access key ID and secret access key.
-5. Press **Back up now** to upload your library. On another device, enter the same settings and press **Restore** to bring it over.
+4. In the app, open **Settings** and enter the account ID, bucket name, access key ID and secret access key.
+5. Press **Back up now** to upload, or **Restore** on another device to bring everything over.
 
-Your keys stay in your browser only; they are used to sign requests to Cloudflare and go nowhere else. Neither button ever deletes anything on either side. For the small JSON files (metadata, progress) the newest one wins, so two devices do not overwrite each other's progress.
+Neither button deletes anything on either side. Your keys are stored in your browser only and are used solely to sign requests to Cloudflare.
 
-## How Japanese lookup works
+## Word lookup
 
-Japanese text is analysed in the browser with [kuroshiro](https://github.com/hexenq/kuroshiro) and the [kuromoji](https://github.com/takuyaa/kuromoji.js) morphological analyser. The dictionary is large, so it is loaded on demand the first time you look up Japanese. Readings come out as hiragana and romaji, and the furigana mode adds `<ruby>` annotations over kanji in the page. Japanese definitions come from a trimmed [JMdict](https://www.edrdg.org/jmdict/j_jmdict.html) (built from [jmdict-simplified](https://github.com/scriptin/jmdict-simplified), about 2 MB gzipped) that ships with the app. Entries without a Spanish gloss are translated online.
+Japanese text is analysed in the browser with [kuromoji](https://github.com/takuyaa/kuromoji.js) and [kuroshiro](https://github.com/hexenq/kuroshiro). The dictionary is large, so it is downloaded the first time you look up Japanese and cached afterwards. Reading and romaji then work offline.
 
-**Network use.** Looking up a word calls public services from your browser: the built-in Chrome translator when available, then Google Translate's unofficial `translate.googleapis.com` endpoint, then MyMemory for translations, and es.wiktionary for Spanish definitions. The selected word (and nothing else) is sent. That Google endpoint is not an official API and may change or rate-limit; Japanese reading and romaji keep working offline. Run `LIVE=1 npx vitest run src/lookup` to check the providers still respond.
+Translations and definitions come from public services called straight from your browser, in this order: Chrome's built-in Translator when its model is installed, Google Translate's unofficial `translate.googleapis.com` endpoint, MyMemory, and es.wiktionary for Spanish definitions. Only the selected text is sent. The Google endpoint is not an official API and may change or be rate limited. To check that the providers still respond, run `LIVE=1 npx vitest run src/lookup`.
 
-## Roadmap
+## Architecture
 
-Checked means it exists today.
+- **TypeScript and Vite**, no UI framework.
+- **One `Storage` interface** for files: the browser's origin-private file system (OPFS) on the web and in the native webviews, and an in-memory implementation for tests.
+- **Pure rules, thin I/O.** Decisions such as what to sync, which books are series, or what the service worker caches live in pure modules tested with real data. Network, DOM and storage code only moves bytes.
+- **Tauri shell.** The Rust side is small: it hands the page the books the system asked to open and runs the signed desktop updater.
+- **Bundle budget.** `npm run budget` fails the build when the shipped JavaScript grows past its limit.
 
-- [x] Web app skeleton (Vite + TypeScript, single `Storage` interface)
-- [x] Open EPUB and PDF, paginated reading, themes, font size, remember position
-- [x] Word lookup with Spanish translation, Japanese reading, romaji and furigana
-- [x] Optional R2 backup and sync
-- [x] Library search, categories, favorites, recents, sorting, and search inside all books
-- [x] Manga (CBZ and CBR): right-to-left, double page, zoom, page preloading
-- [x] Series: volume order by number, read marks, next volume; cover origin band; automatic position/notes sync; cloud-only books
-- [x] Manga: folders of images become CBZ volumes (Add folder), and a vertical (webtoon) scroll mode
-- [x] Right-to-left and vertical EPUB: page-turn keys follow the book, and Settings > Text direction can force horizontal
-- [x] In-book search in EPUB (Ctrl+F): results by chapter, highlighted, tap to jump
-- [x] Highlights, notes and bookmarks in EPUB and PDF
-- [x] Library series: a folder of volumes in your R2 bucket imports as one series (Settings > Import folders)
-- [x] Library: add a whole folder from the device (Add folder): the folder name becomes the series, and you pick EPUB, PDF and/or CBZ
-- [x] PWA with offline support
-- [x] Windows: double-click or "Open with" imports the book (EPUB, PDF, CBZ, CBR)
-- [x] Android releases are signed with a fixed key, so each one updates the previous in place (see docs/DESKTOP-AND-ANDROID.md)
-- [x] Windows app updates itself from the signed installer of the newest release
-- [ ] Test the Windows installer and the Android APK on real devices
-- [ ] Optional: custom CSS and remappable keys, user dictionary
+## Security and privacy
 
-Out of scope on purpose: local API, CLI, rules, plugins, TTS, OCR, OPDS, extra sync backends.
+- Books and notes stay on your device unless you configure R2.
+- The page sets a Content-Security-Policy so scripts inside a book cannot run in the app's origin. Network access is limited to the lookup services, GitHub's release API and Cloudflare R2.
+- The desktop updater accepts only installers signed with the project's key, and Android only installs an APK signed with the same key.
+- The native app can read only the book files the operating system handed to it.
 
-## Tech stack and credits
+## Development
 
-- [TypeScript](https://www.typescriptlang.org/) and [Vite](https://vitejs.dev/), no UI framework
-- [foliate-js](https://github.com/johnfactotum/foliate-js) (MIT) for EPUB rendering
-- [PDF.js](https://github.com/mozilla/pdf.js) (Apache-2.0) for PDF rendering
-- [kuroshiro](https://github.com/hexenq/kuroshiro) and [kuromoji](https://github.com/takuyaa/kuromoji.js) for Japanese readings
-- [aws4fetch](https://github.com/mhart/aws4fetch) for signing S3 requests
-- [Cloudflare R2](https://developers.cloudflare.com/r2/) for optional storage
-- [JMdict](https://www.edrdg.org/jmdict/j_jmdict.html) © the [Electronic Dictionary Research and Development Group](https://www.edrdg.org/), used under [CC BY-SA 4.0](https://www.edrdg.org/edrdg/licence.html); [jmdict-simplified](https://github.com/scriptin/jmdict-simplified) for the JSON conversion
-- [Wiktionary](https://es.wiktionary.org) definitions, CC BY-SA, fetched at lookup time
-- Translations via Google Translate (unofficial endpoint), MyMemory and the Chrome built-in Translator when available
+```bash
+npm run typecheck   # TypeScript
+npm test            # unit tests (vitest) and real-browser tests (Playwright)
+npm run e2e         # end-to-end suites in Chromium
+npm run budget      # bundle size check, after a build
+```
+
+Tests avoid mocks: domain rules are pure functions tested with real data, the sync layer runs against a real S3-compatible server in CI, and browser behaviour is checked in real Chromium. To try the reader on a real book of your own, set `REAL_EPUB` to its path for the opt-in specs; never commit books.
 
 ## Contributing
 
-Issues and pull requests are welcome.
-Open an issue first for anything big so we can agree on the approach.
-Run `npm run typecheck`, `npm test` and (after a build) `npm run budget` before sending a PR. Tests avoid mocks: domain rules are pure functions tested with real data, and browser behaviour is checked in a real Chromium (see `e2e/`). To try the reader on a real book of your own, set `REAL_EPUB` to its path for the opt-in specs; never commit books.
+Issues and pull requests are welcome. Open an issue first for anything large so the approach can be agreed. Before sending a pull request, run `npm run typecheck`, `npm test` and, after a build, `npm run budget`.
+
+Out of scope on purpose: local API, CLI, plugins, TTS, OCR, OPDS, and additional sync backends.
+
+## Acknowledgements
+
+- [foliate-js](https://github.com/johnfactotum/foliate-js) (MIT) renders EPUB.
+- [PDF.js](https://github.com/mozilla/pdf.js) (Apache-2.0) renders PDF.
+- [kuromoji](https://github.com/takuyaa/kuromoji.js) and [kuroshiro](https://github.com/hexenq/kuroshiro) provide Japanese readings.
+- [node-unrar-js](https://github.com/YuJianrong/node-unrar.js) decodes RAR comics.
+- [aws4fetch](https://github.com/mhart/aws4fetch) signs S3 requests.
+- [JMdict](https://www.edrdg.org/jmdict/j_jmdict.html) © the [Electronic Dictionary Research and Development Group](https://www.edrdg.org/), used under [CC BY-SA 4.0](https://www.edrdg.org/edrdg/licence.html), converted with [jmdict-simplified](https://github.com/scriptin/jmdict-simplified).
+- [Wiktionary](https://es.wiktionary.org) definitions, CC BY-SA, fetched at lookup time.
+- Translations through Google Translate (unofficial endpoint), MyMemory and the Chrome built-in Translator when available.
 
 ## License
 
-[MIT](LICENSE) (c) 2026 ShiroKuro-hen
+[MIT](LICENSE) © 2026 ShiroKuro-hen
