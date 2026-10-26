@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { fixtureBytes } from '../reader/fixtures/load';
-import { storeZip } from '../reader/fixtures/store-zip';
+import { storeZip } from '../storage/store-zip';
 import { memoryStorage } from '../storage/opfs';
 import { createLibrary } from '../storage/library';
 import { SECRET, withS3 } from './fake-s3';

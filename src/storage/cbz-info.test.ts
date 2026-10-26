@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { fixtureFile } from '../reader/fixtures/load';
 import { storeRar5 } from '../reader/fixtures/store-rar';
-import { storeZip } from '../reader/fixtures/store-zip';
+import { storeZip } from './store-zip';
 import { readCbzInfo } from './cbz-info';
 
 // Image bytes are stand-ins: the reader never decodes them, it only names and counts them.

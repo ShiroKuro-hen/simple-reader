@@ -4,6 +4,7 @@
 // REAL_EPUB=<path to your own .epub> adds checks on a real book (read in place, never copied).
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import * as support from '../../e2e/support.mjs';
 import { largestChapter } from './real-epub';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -12,38 +13,7 @@ const LIVE = !!env.LIVE;
 const REAL_EPUB = env.REAL_EPUB;
 const node = (name: string): Promise<any> => import(/* @vite-ignore */ `node:${name}`);
 
-/** The installed playwright devDependency, else PLAYWRIGHT_DIR, else the copy in the npx cache the Playwright MCP uses. */
-async function findPlaywright(): Promise<any> {
-  const { existsSync, readdirSync } = await node('fs');
-  const { homedir } = await node('os');
-  const { join } = await node('path');
-  const { pathToFileURL } = await node('url');
-  try {
-    return await import('playwright'); // the installed devDependency
-  } catch {
-    /* fall back to PLAYWRIGHT_DIR / the npx cache */
-  }
-  const dirs: string[] = [];
-  if (env.PLAYWRIGHT_DIR) dirs.push(env.PLAYWRIGHT_DIR);
-  const npx = join(homedir(), 'AppData/Local/npm-cache/_npx');
-  for (const d of existsSync(npx) ? readdirSync(npx) : []) dirs.push(join(npx, d, 'node_modules/playwright'));
-  const dir = dirs.find((d) => existsSync(join(d, 'index.mjs')));
-  return dir ? import(/* @vite-ignore */ pathToFileURL(join(dir, 'index.mjs')).href) : undefined;
-}
-
-/** Any Chromium already in Playwright's cache when the revision it wants is not installed (or CHROMIUM_PATH). */
-async function findChromium(chromium: any): Promise<string | undefined> {
-  const { existsSync, readdirSync } = await node('fs');
-  const { homedir } = await node('os');
-  const { join } = await node('path');
-  if (env.CHROMIUM_PATH) return env.CHROMIUM_PATH;
-  if (existsSync(chromium.executablePath())) return undefined;
-  const cache = join(homedir(), 'AppData/Local/ms-playwright');
-  const found: string[] = (existsSync(cache) ? readdirSync(cache) : []).filter((d: string) => /^chromium-[0-9]+$/.test(d)).sort().reverse();
-  return found.map((d) => join(cache, d, 'chrome-win64/chrome.exe')).find(existsSync);
-}
-
-const playwright: any = await findPlaywright();
+const playwright: any = await support.loadPlaywright();
 
 const chapter = new TextDecoder().decode(readFileSync(fileURLToPath(new URL('./browser/chapter.xhtml', import.meta.url))));
 
@@ -76,11 +46,11 @@ describe.skipIf(!playwright)('in a real browser', () => {
       logLevel: 'silent',
       server: { port: 0, host: '127.0.0.1' },
       // pre-bundle the CommonJS kuromoji stack up front so Vite doesn't reload the page mid-test
-      optimizeDeps: { include: ['kuroshiro', 'kuroshiro-analyzer-kuromoji', 'kuromoji'] },
+      optimizeDeps: { include: ['kuroshiro', 'kuromoji'] },
     });
     await server.listen();
     url = `${server.resolvedUrls.local[0]}src/lookup/browser/harness.html`;
-    browser = await playwright.chromium.launch({ executablePath: await findChromium(playwright.chromium) });
+    browser = await support.launchChromium(playwright);
     context = await browser.newContext();
     page = await context.newPage();
     await load();

@@ -4,36 +4,20 @@
 //   node src/reader/e2e/run.mjs
 // Needs the `playwright` devDependency (PLAYWRIGHT_DIR or the npx cache are fallbacks).
 import assert from 'node:assert/strict';
-import { readdirSync, existsSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+import { launchChromium, loadPlaywright } from '../../../e2e/support.mjs';
 
 const repo = fileURLToPath(new URL('../../../', import.meta.url));
 
-function findPlaywright() {
-  if (process.env.PLAYWRIGHT_DIR) return process.env.PLAYWRIGHT_DIR;
-  const npx = join(homedir(), 'AppData/Local/npm-cache/_npx');
-  for (const d of existsSync(npx) ? readdirSync(npx) : [])
-    if (existsSync(join(npx, d, 'node_modules/playwright/index.mjs'))) return join(npx, d, 'node_modules/playwright');
-  throw new Error('Playwright not found: set PLAYWRIGHT_DIR');
-}
-
-// The installed devDependency first; the npx-cache / PLAYWRIGHT_DIR copy only as a fallback.
-const { chromium } = await import('playwright').catch(() => import(pathToFileURL(join(findPlaywright(), 'index.mjs')).href));
+const pw = await loadPlaywright();
+if (!pw) throw new Error('Playwright not found: set PLAYWRIGHT_DIR');
 const { createServer } = await import(pathToFileURL(join(repo, 'node_modules/vite/dist/node/index.js')).href);
 
 const server = await createServer({ root: repo, logLevel: 'error', optimizeDeps: { include: ['pdfjs-dist'] } });
 await server.listen();
 const base = server.resolvedUrls.local[0];
-// Use whichever Chromium is already in Playwright's cache if the bundled revision is not installed.
-function findChromium() {
-  if (process.env.CHROMIUM_PATH) return process.env.CHROMIUM_PATH;
-  const cache = join(homedir(), 'AppData/Local/ms-playwright');
-  const dirs = (existsSync(cache) ? readdirSync(cache) : []).filter((d) => /^chromium-\d+$/.test(d)).sort().reverse();
-  return dirs.map((d) => join(cache, d, 'chrome-win64/chrome.exe')).find(existsSync);
-}
-const browser = await chromium.launch({ executablePath: existsSync(chromium.executablePath()) ? undefined : findChromium() });
+const browser = await launchChromium(pw);
 const context = await browser.newContext({ viewport: { width: 1000, height: 760 } });
 
 // Observation only: remember which blob: URLs are alive and how many document/window listeners exist.

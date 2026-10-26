@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { fixtureBytes, fixtureFile } from '../reader/fixtures/load';
-import { storeZip } from '../reader/fixtures/store-zip';
+import { storeZip } from './store-zip';
 import { extractText } from '../library/book-text';
 import { memoryStorage } from './opfs';
 import { createLibrary, setWriting } from './library';

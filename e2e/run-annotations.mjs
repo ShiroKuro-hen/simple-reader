@@ -15,13 +15,15 @@ await server.listen();
 const BASE = server.resolvedUrls.local[0];
 const browser = await launchChromium(pw);
 const specs = ['app.e2e.js', 'library-organise.e2e.js', 'library-origin.e2e.js', 'volumes.e2e.js', 'autosync.e2e.js', 'cloud-books.e2e.js', 'native-update.e2e.js', 'library-search.e2e.js', 'annotations.e2e.js', 'word-select.e2e.js', 'layout.e2e.js', 'search.e2e.js', 'pdf-highlights.e2e.js', 'pdf-search.e2e.js', 'webtoon.e2e.js', ...(process.env.REAL_EPUB ? ['real-annotations.e2e.js'] : [])];
+// These specs reach a stand-in bucket host (fake-r2.test) or fetch data: URLs, which the page's CSP rightly refuses; the rest run under it.
+const NEEDS_OPEN_CSP = new Set(['autosync.e2e.js', 'cloud-books.e2e.js', 'annotations.e2e.js']);
 let failed = 0;
 // Layout screenshots: LAYOUT_SHOTS picks the folder; the default is a temp folder.
 const shots = process.env.LAYOUT_SHOTS ?? join(tmpdir(), 'simple-reader-layout-shots');
 mkdirSync(shots, { recursive: true });
 for (const spec of specs) {
   // Touch is enabled for the word-select spec only: its taps must reach the page as touch input.
-  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write'], hasTouch: spec === 'word-select.e2e.js' });
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, acceptDownloads: true, permissions: ['clipboard-read', 'clipboard-write'], hasTouch: spec === 'word-select.e2e.js', bypassCSP: NEEDS_OPEN_CSP.has(spec) });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
