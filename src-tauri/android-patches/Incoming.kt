@@ -27,6 +27,7 @@ object Incoming {
   private val pending = ArrayList<Item>() // queued, not yet listed to the page
   private val items = HashMap<Int, Item>() // listed, readable by id
   private val streams = HashMap<Int, InputStream>()
+  private var folder: String? = null // the picked folder's books, until the page takes them (the system may have restarted the app meanwhile)
   private const val PICK_FOLDER = 4242
   private val BOOK = Regex(""".*\.(epub|pdf|cbz|cbr)$""", RegexOption.IGNORE_CASE)
 
@@ -70,7 +71,7 @@ object Incoming {
     activity.runOnUiThread { activity.startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), PICK_FOLDER) }
   }
 
-  /** Walks the picked folder and hands the page its books as [{id, path}] ("Folder/sub/file.ext"); [] when cancelled. */
+  /** Walks the picked folder and keeps its books as [{id, path}] ("Folder/sub/file.ext"; [] when cancelled) for takeFolder. */
   @Synchronized
   fun folderPicked(ctx: Context, requestCode: Int, resultCode: Int, data: Intent?) {
     if (requestCode != PICK_FOLDER) return
@@ -101,8 +102,13 @@ object Incoming {
         ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "Folder"
       walk(root, rootName)
     }
-    webView?.post { webView?.evaluateJavascript("window.__srFolder&&window.__srFolder($out)", null) }
+    folder = out.toString()
+    webView?.post { webView?.evaluateJavascript("window.__srFolder&&window.__srFolder()", null) }
   }
+
+  @Synchronized
+  @JavascriptInterface
+  fun takeFolder(): String = (folder ?: "[]").also { folder = null }
 
   /** JSON [{id, name, mime}] of the files queued since the last call. */
   @Synchronized
