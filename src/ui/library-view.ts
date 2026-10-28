@@ -19,6 +19,7 @@ import { storage } from '../storage/index';
 import { libIcon } from './library-icons';
 import { bookLabel } from './reading';
 import { createSettings, type App } from './settings';
+import type { PickedFile } from '../native/incoming';
 import { debounce } from './timing';
 
 type SeriesEntry = Extract<Entry, { kind: 'series' }>;
@@ -133,6 +134,10 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     input,
   );
   root.replaceChildren(lib, settings.el);
+  if (window.SRIntent) {
+    window.__srFolder = () => void addPickedFolder();
+    void addPickedFolder(); // a folder picked while the system restarted the app
+  }
 
   // --- drag & drop anywhere on the page ---
   let depth = 0;
@@ -180,7 +185,24 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     await refresh();
   }
 
+  /**
+   * Android: the native folder picker leaves the books of the folder for the page to take, also when the system restarted
+   * the app while the picker was open. They all go in as one series named after the folder.
+   */
+  async function addPickedFolder() {
+    const { fetchFile } = await import('../native/incoming');
+    const files = JSON.parse(window.SRIntent!.takeFolder()) as PickedFile[];
+    const plan = planFolderImport(files.map((f) => f.path));
+    if (!plan.books.length) return;
+    const items = plan.books.map((b) => {
+      const name = b.path.split('/').pop()!;
+      return { name, load: () => fetchFile(window.SRIntent!, files[b.index]!.id, name, '') };
+    });
+    await addFolder(items, plan.folder);
+  }
+
   function pickFolder() {
+    if (window.SRIntent) return window.SRIntent.pickFolder();
     folderPicker?.remove();
     const picker = h('input', { type: 'file', webkitdirectory: true, multiple: true, hidden: true,
       onchange: () => {

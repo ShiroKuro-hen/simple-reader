@@ -43,6 +43,12 @@ kt = swap(
     Incoming.add(this, intent)
   }
 
+  @Suppress("DEPRECATION")
+  override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
+    super.onActivityResult(requestCode, resultCode, data)
+    Incoming.folderPicked(this, requestCode, resultCode, data)
+  }
+
 `,
   'class MainActivity line',
 );

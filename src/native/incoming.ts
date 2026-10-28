@@ -5,17 +5,20 @@ import { toast } from '../ui/dom';
 import { planIncoming, type Incoming } from './intake';
 import { oneAtATime } from './one-at-a-time';
 
-type Bridge = { list(): string; read(id: number, max: number): string | null; close(id: number): void };
+type Bridge = { list(): string; read(id: number, max: number): string | null; close(id: number): void; pickFolder(): void; takeFolder(): string };
+/** A book inside a folder the user picked: `path` is "Folder/sub/file.ext", `id` is read with fetchFile. */
+export type PickedFile = { id: number; path: string };
 declare global {
   interface Window {
     SRIntent?: Bridge;
     __srIncoming?: () => void;
+    __srFolder?: () => void;
   }
 }
 
 const CHUNK = 768 * 1024;
 
-async function fetchFile(b: Bridge, id: number, name: string, type: string): Promise<File> {
+export async function fetchFile(b: Bridge, id: number, name: string, type: string): Promise<File> {
   const parts: Uint8Array<ArrayBuffer>[] = [];
   try {
     for (;;) {
