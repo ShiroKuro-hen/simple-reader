@@ -180,7 +180,24 @@ export function mountLibrary(root: HTMLElement, app: App, onOpen: (id: string) =
     await refresh();
   }
 
+  /** Android: the native folder picker, then every book in the folder goes in as one series named after it. */
+  async function pickFolderAndroid() {
+    const { pickFolderNative, fetchFile } = await import('../native/incoming');
+    const files = await pickFolderNative();
+    const plan = planFolderImport(files.map((f) => f.path));
+    if (!plan.books.length) {
+      if (files.length) toast('No EPUB, PDF, CBZ or CBR files in that folder.', 'error');
+      return;
+    }
+    const items = plan.books.map((b) => {
+      const name = b.path.split('/').pop()!;
+      return { name, load: () => fetchFile(window.SRIntent!, files[b.index]!.id, name, '') };
+    });
+    await addFolder(items, plan.folder);
+  }
+
   function pickFolder() {
+    if (window.SRIntent) return void pickFolderAndroid();
     folderPicker?.remove();
     const picker = h('input', { type: 'file', webkitdirectory: true, multiple: true, hidden: true,
       onchange: () => {

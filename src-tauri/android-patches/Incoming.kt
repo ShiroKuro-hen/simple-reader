@@ -1,8 +1,10 @@
 package __PKG__
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.util.Base64
 import android.webkit.JavascriptInterface
@@ -25,6 +27,8 @@ object Incoming {
   private val pending = ArrayList<Item>() // queued, not yet listed to the page
   private val items = HashMap<Int, Item>() // listed, readable by id
   private val streams = HashMap<Int, InputStream>()
+  private const val PICK_FOLDER = 4242
+  private val BOOK = Regex(""".*\.(epub|pdf|cbz|cbr)$""", RegexOption.IGNORE_CASE)
 
   fun attach(view: WebView) {
     webView = view
@@ -57,6 +61,47 @@ object Incoming {
       pending.add(Item(nextId++, uri, displayName(resolver, uri), resolver.getType(uri) ?: i.type))
     }
     if (pending.isNotEmpty()) webView?.post { webView?.evaluateJavascript("window.__srIncoming&&window.__srIncoming()", null) }
+  }
+
+  /** The WebView cannot pick a folder: the page asks for the system's folder picker. The answer comes to folderPicked. */
+  @JavascriptInterface
+  fun pickFolder() {
+    val activity = webView?.context as? Activity ?: return
+    activity.runOnUiThread { activity.startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT_TREE), PICK_FOLDER) }
+  }
+
+  /** Walks the picked folder and hands the page its books as [{id, path}] ("Folder/sub/file.ext"); [] when cancelled. */
+  @Synchronized
+  fun folderPicked(ctx: Context, requestCode: Int, resultCode: Int, data: Intent?) {
+    if (requestCode != PICK_FOLDER) return
+    context = ctx.applicationContext
+    val out = JSONArray()
+    val tree = data?.data
+    if (resultCode == Activity.RESULT_OK && tree != null) {
+      val resolver = ctx.contentResolver
+      val root = DocumentsContract.getTreeDocumentId(tree)
+      fun walk(parentId: String, path: String) {
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parentId)
+        val columns = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME, DocumentsContract.Document.COLUMN_MIME_TYPE)
+        resolver.query(children, columns, null, null, null)?.use { c ->
+          while (c.moveToNext()) {
+            val id = c.getString(0)
+            val name = c.getString(1) ?: continue
+            if (c.getString(2) == DocumentsContract.Document.MIME_TYPE_DIR) walk(id, "$path/$name")
+            else if (BOOK.matches(name)) {
+              val item = Item(nextId++, DocumentsContract.buildDocumentUriUsingTree(tree, id), name, null)
+              items[item.id] = item
+              out.put(JSONObject().put("id", item.id).put("path", "$path/$name"))
+            }
+          }
+        }
+      }
+      // The folder's own name is the first path segment, as webkitRelativePath has it on the web.
+      val rootName = resolver.query(DocumentsContract.buildDocumentUriUsingTree(tree, root), arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null)
+        ?.use { if (it.moveToFirst()) it.getString(0) else null } ?: "Folder"
+      walk(root, rootName)
+    }
+    webView?.post { webView?.evaluateJavascript("window.__srFolder&&window.__srFolder($out)", null) }
   }
 
   /** JSON [{id, name, mime}] of the files queued since the last call. */

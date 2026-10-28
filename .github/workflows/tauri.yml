@@ -76,6 +76,7 @@ jobs:
           done
           echo "$manifest" | grep -q 'debuggable.*=true' && { echo "the APK is debuggable"; exit 1; }
           unzip -p "$apk" 'classes*.dex' | grep -aq SRIntent || { echo "Incoming.kt is not in the dex"; exit 1; }
+          unzip -p "$apk" 'classes*.dex' | grep -aq folderPicked || { echo "the folder picker is not in the dex"; exit 1; }
       # Android only updates an app when the new APK has the same signing key. The debug key changes with every CI
       # runner, so without our own key each release would need an uninstall first, which deletes the library.
       - name: Sign the APK with the release key
