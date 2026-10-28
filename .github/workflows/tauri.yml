@@ -50,7 +50,7 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
       - name: Android SDK / NDK
         run: |
           # The runner image ships the SDK; add the NDK explicitly so the path is known.
