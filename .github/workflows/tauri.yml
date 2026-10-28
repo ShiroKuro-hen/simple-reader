@@ -29,7 +29,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       # Release profile and after the build, so the dependencies and ../dist it already made are reused.
       - run: cargo test --release --lib --manifest-path src-tauri/Cargo.toml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: simple-reader-windows
           path: |
@@ -99,7 +99,7 @@ jobs:
             [ "$actual" = "$EXPECTED_SHA256" ] || { echo "unexpected signing certificate"; exit 1; }
           done
           rm -f "$RUNNER_TEMP/release.p12"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: simple-reader-android
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
